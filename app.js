@@ -1635,6 +1635,90 @@ function setupGlobalShortcuts() {
   });
 }
 
+// Mobile Bottom Navigation Handlers
+function setupMobileNav() {
+  const mRouteBtn = document.getElementById('mobileRouteBtn');
+  const mThanaBtn = document.getElementById('mobileThanaBtn');
+  const mRiversBtn = document.getElementById('mobileRiversBtn');
+  const mLayersBtn = document.getElementById('mobileLayersBtn');
+  const mLocateBtn = document.getElementById('mobileLocateBtn');
+
+  const routePanel = document.getElementById('routePanel');
+  const thanaPanel = document.getElementById('thanaPanel');
+  const layersMenu = document.getElementById('layersMenu');
+
+  function clearNavActive() {
+    document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  }
+
+  if (mRouteBtn) {
+    mRouteBtn.addEventListener('click', () => {
+      const isOpen = routePanel.classList.contains('active');
+      thanaPanel.classList.remove('active');
+      layersMenu.classList.remove('active');
+      clearNavActive();
+
+      if (!isOpen) {
+        routePanel.classList.add('active');
+        mRouteBtn.classList.add('active');
+      } else {
+        routePanel.classList.remove('active');
+      }
+    });
+  }
+
+  if (mThanaBtn) {
+    mThanaBtn.addEventListener('click', () => {
+      const isOpen = thanaPanel.classList.contains('active');
+      routePanel.classList.remove('active');
+      layersMenu.classList.remove('active');
+      clearNavActive();
+
+      if (!isOpen) {
+        thanaPanel.classList.add('active');
+        mThanaBtn.classList.add('active');
+      } else {
+        thanaPanel.classList.remove('active');
+      }
+    });
+  }
+
+  if (mRiversBtn) {
+    mRiversBtn.addEventListener('click', () => {
+      const riversToggleBtn = document.getElementById('riversToggleBtn');
+      if (riversToggleBtn) riversToggleBtn.click();
+      mRiversBtn.classList.toggle('active', state.riversVisible);
+    });
+  }
+
+  if (mLayersBtn) {
+    mLayersBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      routePanel.classList.remove('active');
+      thanaPanel.classList.remove('active');
+      layersMenu.classList.toggle('active');
+      mLayersBtn.classList.toggle('active', layersMenu.classList.contains('active'));
+    });
+  }
+
+  if (mLocateBtn) {
+    mLocateBtn.addEventListener('click', () => {
+      const locateBtn = document.getElementById('locateMeBtn');
+      if (locateBtn) locateBtn.click();
+      mLocateBtn.classList.add('active');
+      setTimeout(() => mLocateBtn.classList.remove('active'), 2000);
+    });
+  }
+
+  // When panel close button is clicked, remove bottom nav active class
+  document.getElementById('closeRoutePanelBtn')?.addEventListener('click', () => {
+    mRouteBtn?.classList.remove('active');
+  });
+  document.getElementById('closeThanaPanelBtn')?.addEventListener('click', () => {
+    mThanaBtn?.classList.remove('active');
+  });
+}
+
 // Application Initialization
 window.addEventListener('DOMContentLoaded', () => {
   initMap();
@@ -1648,4 +1732,5 @@ window.addEventListener('DOMContentLoaded', () => {
   setupQuickPlaces();
   setupFullscreen();
   setupGlobalShortcuts();
+  setupMobileNav();
 });

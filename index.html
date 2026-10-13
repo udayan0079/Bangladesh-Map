@@ -2,7 +2,7 @@
 <html lang="bn">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>বাংলাদেশ ম্যাপ (Bangladesh Map) | সম্পূর্ণ বাংলাদেশ মানচিত্র ও রুট ক্যালকুলেটর</title>
   <meta name="description" content="বাংলাদেশ ম্যাপ - শুধুমাত্র বাংলাদেশ মানচিত্র। সকল থানা, গ্রাম, নদী ও সড়কপথের পূর্ণাঙ্গ বিবরণসহ দূরত্ব ও রুট নির্ণায়ক।">
   <meta name="theme-color" content="#059669">
@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -131,6 +131,7 @@
 
     <!-- Thana & District Directory Sidebar Panel -->
     <aside class="thana-panel" id="thanaPanel">
+      <div class="sheet-drag-handle"></div>
       <div class="panel-header">
         <div class="panel-title">
           <i class="fa-solid fa-sitemap text-emerald"></i>
@@ -168,6 +169,7 @@
 
     <!-- Route & Distance Calculator Sidebar Panel -->
     <aside class="route-panel" id="routePanel">
+      <div class="sheet-drag-handle"></div>
       <div class="panel-header">
         <div class="panel-title">
           <i class="fa-solid fa-route"></i>
@@ -342,6 +344,30 @@
         <button class="place-badge" data-lat="21.8167" data-lng="90.1167" data-name="কুয়াকাটা সমুদ্র সৈকত">কুয়াকাটা</button>
       </div>
     </div>
+
+    <!-- Mobile Bottom Navigation Bar (Thumb-friendly mobile/tab control) -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+      <button class="mobile-nav-btn active-route" id="mobileRouteBtn" title="রুট ও দূরত্ব">
+        <i class="fa-solid fa-diamond-turn-right"></i>
+        <span>রুট ও দূরত্ব</span>
+      </button>
+      <button class="mobile-nav-btn" id="mobileThanaBtn" title="থানা ও জেলা ডিরেক্টরি">
+        <i class="fa-solid fa-sitemap"></i>
+        <span>থানা-জেলা</span>
+      </button>
+      <button class="mobile-nav-btn" id="mobileRiversBtn" title="নদ-নদী লেয়ার">
+        <i class="fa-solid fa-water"></i>
+        <span>নদ-নদী</span>
+      </button>
+      <button class="mobile-nav-btn" id="mobileLayersBtn" title="ম্যাপ লেয়ার">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>লেয়ার</span>
+      </button>
+      <button class="mobile-nav-btn" id="mobileLocateBtn" title="আমার লোকেশন">
+        <i class="fa-solid fa-crosshairs"></i>
+        <span>অবস্থান</span>
+      </button>
+    </nav>
   </main>
 
   <!-- Notification Toast -->
@@ -351,9 +377,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
-  <script src="bd_data.js?v=3"></script>
+  <script src="bd_data.js?v=4"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

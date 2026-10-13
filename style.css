@@ -1467,72 +1467,269 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
-/* Responsive Adaptations */
+/* Default Desktop Hidden for Mobile Nav Elements */
+.mobile-bottom-nav {
+  display: none;
+}
+
+.sheet-drag-handle {
+  display: none;
+}
+
+/* ===================================================
+   RESPONSIVE DESIGN (MOBILE & TABLET ADAPTATIONS)
+=================================================== */
+
+/* Smart Mobile Phones (width <= 768px) */
 @media (max-width: 768px) {
+  html, body {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Compact Mobile Header */
   .app-header {
     height: auto;
-    flex-wrap: wrap;
-    padding: 8px 12px;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 12px 6px;
+    gap: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
   
   .header-brand {
     min-width: auto;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .brand-logo {
+    width: 32px;
+    height: 32px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+  }
+
+  .brand-text h1 {
+    font-size: 0.98rem;
+    line-height: 1.1;
+  }
+
+  .brand-text h1 span {
+    font-size: 0.72rem;
   }
 
   .brand-text .tagline {
     display: none;
   }
 
+  /* Hide Desktop Top Action Buttons on Mobile - Controlled via Mobile Bottom Nav */
   .header-actions {
-    overflow-x: auto;
-    max-width: 100%;
-    padding: 2px 0 4px 0;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    display: none !important;
   }
 
-  .header-actions::-webkit-scrollbar {
-    display: none;
-  }
-
-  .action-btn {
-    padding: 6px 11px;
-    font-size: 0.78rem;
-  }
-  
+  /* Full Width Search Bar */
   .search-container {
-    order: 3;
+    order: 2;
     max-width: 100%;
     width: 100%;
   }
 
+  .search-box {
+    padding: 3px 6px 3px 12px;
+  }
+
+  .search-box input {
+    font-size: 16px !important; /* Prevents auto zoom jump in iOS Safari */
+  }
+
+  .search-action-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .search-dropdown {
+    max-height: 280px;
+  }
+
+  /* Compact Horizontal Divisions Scrolling Bar */
+  .divisions-bar {
+    padding: 5px 10px;
+    gap: 5px;
+  }
+
+  .div-label {
+    display: none; /* More space for division chips */
+  }
+
+  .div-chip {
+    padding: 3px 10px;
+    font-size: 0.72rem;
+  }
+
+  /* Map and Main Container layout */
+  .main-container {
+    height: calc(100dvh - 90px);
+  }
+
+  /* Mobile Bottom Navigation Bar (Thumb friendly) */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
+    z-index: 1200;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: #475569;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 5px 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease;
+  }
+
+  .mobile-nav-btn i {
+    font-size: 1.12rem;
+  }
+
+  .mobile-nav-btn:active, .mobile-nav-btn.active {
+    color: #059669;
+  }
+
+  /* Native Mobile Bottom Sheet Drawer for Side Panels */
+  .sheet-drag-handle {
+    display: block;
+    width: 44px;
+    height: 5px;
+    background: #cbd5e1;
+    border-radius: 4px;
+    margin: 8px auto 0;
+  }
+
   .route-panel, .thana-panel {
-    top: 0;
+    position: fixed;
+    top: 16px;
     left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
     max-width: 100%;
-    border-radius: 0;
-    z-index: 1500;
+    border-radius: 20px 20px 0 0;
+    z-index: 2000;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.35);
+    transform: translateY(105%);
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .route-panel.active, .thana-panel.active {
+    transform: translateY(0);
+  }
+
+  .panel-header {
+    padding: 12px 18px 10px;
+  }
+
+  .panel-title h3 {
+    font-size: 0.95rem;
+  }
+
+  .close-panel-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+    background: #f1f5f9;
+  }
+
+  .input-wrapper input, .form-select, .directory-search input {
+    font-size: 16px !important;
+  }
+
+  /* Clearances for overlays above bottom bar */
+  .quick-places-dock {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 16px);
+    padding: 3px 8px;
+    font-size: 0.72rem;
   }
 
   .mask-status-badge {
     top: 8px;
     left: 8px;
-    font-size: 0.68rem;
-    padding: 4px 8px;
-  }
-
-  .quick-places-dock {
-    bottom: 8px;
-    padding: 4px 8px;
-    max-width: calc(100vw - 16px);
+    font-size: 0.65rem;
+    padding: 3px 8px;
   }
 
   .map-layers-control {
     top: 8px;
     right: 8px;
+  }
+
+  .layers-toggle-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .leaflet-bottom.leaflet-right {
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 8px !important;
+  }
+
+  .measurement-hud {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    font-size: 0.78rem;
+  }
+
+  .toast {
+    bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Tablet Devices (width 769px to 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .mobile-bottom-nav {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .action-btn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .search-container {
+    max-width: 340px;
+  }
+
+  .route-panel, .thana-panel {
+    width: 340px;
   }
 }
