@@ -598,6 +598,12 @@
       </div>
     </div>
 
+    <!-- Floating Re-center Button when user pans/zooms away during navigation -->
+    <button id="recenterNavBtn" class="recenter-nav-btn" style="display: none;" title="পুনরায় নিজের অবস্থানে ফিরুন">
+      <i class="fa-solid fa-location-crosshairs"></i>
+      <span data-i18n="recenterNav">পুনরায় কেন্দ্রবিন্দুতে ফিরুন</span>
+    </button>
+
     <!-- Mobile Bottom Navigation Bar (Thumb-friendly mobile/tab control) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
       <button class="mobile-nav-btn active" id="mobileHomeBtn" title="মূল বাংলাদেশ ম্যাপ">
@@ -638,10 +644,11 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
-  <script src="bd_data.js?v=13"></script>
-  <script src="bd_districts_geojson.js?v=13"></script>
+  <script src="bd_data.js?v=14"></script>
+  <script src="bd_districts_geojson.js?v=14"></script>
+  <script src="bd_thanas_coords.js?v=14"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

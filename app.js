@@ -57,7 +57,8 @@ const state = {
     coordinates: [],
     steps: [],
     totalDistanceKm: 0,
-    totalMinutes: 0
+    totalMinutes: 0,
+    userPannedAway: false
   },
   districtFocus: {
     active: false,
@@ -351,6 +352,26 @@ function initMap() {
 
   // Map Click Listener
   state.map.on('click', handleMapClick);
+
+  // Detect user panning/zooming away during active navigation
+  // Prevents mobile screen auto-jumping back while inspecting destination!
+  state.map.on('dragstart zoomstart movestart', () => {
+    if (state.navTracking.active) {
+      state.navTracking.userPannedAway = true;
+      const recenterBtn = document.getElementById('recenterNavBtn');
+      if (recenterBtn) recenterBtn.style.display = 'flex';
+    }
+  });
+
+  // Re-center button click handler (like Google Maps "Re-center")
+  document.getElementById('recenterNavBtn')?.addEventListener('click', () => {
+    state.navTracking.userPannedAway = false;
+    const recenterBtn = document.getElementById('recenterNavBtn');
+    if (recenterBtn) recenterBtn.style.display = 'none';
+    if (state.navTracking.currentLatLng) {
+      state.map.setView(state.navTracking.currentLatLng, Math.max(state.map.getZoom(), 16), { animate: true });
+    }
+  });
 }
 
 // Apply Bangladesh Boundary (Crisp Glowing Territorial Outline - Zero Canvas Inversion Glitches)
@@ -731,10 +752,14 @@ async function performSearch(query) {
       }
       d.thanas.forEach(th => {
         if (th.toLowerCase().includes(qLower)) {
+          const coordKey = d.en ? `${d.en}:${th}` : th;
+          const authenticCoord = (typeof BD_THANA_COORDS !== 'undefined' && (BD_THANA_COORDS[coordKey] || BD_THANA_COORDS[th]));
+          const thLat = authenticCoord ? authenticCoord.lat : d.lat;
+          const thLng = authenticCoord ? authenticCoord.lng : d.lng;
           localResults.push({
             display_name: `${th} থানা, ${d.name} জেলা, বাংলাদেশ`,
-            lat: d.lat,
-            lon: d.lng,
+            lat: thLat,
+            lon: thLng,
             isLocal: true,
             fullQuery: `${th}, ${d.name}, Bangladesh`
           });
@@ -873,8 +898,8 @@ function handleMapClick(e) {
         closestIdx = i;
       }
     }
-    // If clicked along the route within 50 meters: move arrow there for testing and stand still!
-    if (closestDistM <= 50 && coords.length > 0) {
+    // If clicked along the route within 40 meters: move arrow there for testing
+    if (closestDistM <= 40 && coords.length > 0) {
       state.navTracking.currentCoordIndex = closestIdx;
       const targetPt = coords[closestIdx];
       const nextPt = coords[Math.min(coords.length - 1, closestIdx + 1)];
@@ -884,18 +909,14 @@ function handleMapClick(e) {
       updateLiveVehicleMarker(targetPt[0], targetPt[1], state.travelMode, heading);
       updateGpsMovementDisplay(false, 0);
       updateLiveTurnGuidance(targetPt[0], targetPt[1]);
-      showToast(state.lang === 'bn' ? 'অ্যারো এই স্থানে অবস্থান নিয়েছে (দাঁড়িয়ে আছে)' : 'Arrow moved to this location (standing still)');
-      return;
     }
-
-    // Clicked off-route -> instant reroute to destination!
-    handleOffRouteReroute(lat, lng);
+    // When navigating, casual clicks or mobile pinch-zoom touches NEVER trigger auto-reroute!
     return;
   }
 
   // Route Selection Mode
   const routePanel = document.getElementById('routePanel');
-  if (routePanel.classList.contains('active')) {
+  if (routePanel && routePanel.classList.contains('active')) {
     if (!state.routePoints.start) {
       setRoutePointFromMap('start', lat, lng, `পয়েন্ট A (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
       showToast(state.lang === 'bn' ? 'শুরুর স্থান নির্ধারিত হয়েছে। এবার গন্তব্য স্থানে ক্লিক করুন।' : 'Start point set. Now click destination point on map.');
@@ -903,8 +924,10 @@ function handleMapClick(e) {
       setRoutePointFromMap('end', lat, lng, `পয়েন্ট B (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
       calculateRoute();
     } else {
-      setRoutePointFromMap('end', lat, lng, `পয়েন্ট B (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
-      calculateRoute();
+      // Both start and end points are ALREADY chosen!
+      // The user is freely inspecting or zooming into their destination.
+      // Do NOT overwrite Point B or jump the camera back!
+      return;
     }
   }
 }
@@ -1743,6 +1766,9 @@ function startLiveNavigation() {
   state.navTracking.currentStepIndex = 0;
   state.navTracking.isMoving = false;
   state.navTracking.speedKmh = 0;
+  state.navTracking.userPannedAway = false;
+  const recenterBtn = document.getElementById('recenterNavBtn');
+  if (recenterBtn) recenterBtn.style.display = 'none';
 
   // Clear any existing animation interval (Arrow NEVER auto-moves!)
   if (state.navAnimation.intervalId) {
@@ -1840,7 +1866,11 @@ function onGpsPositionUpdate(pos) {
 
   // Update vehicle marker on map
   updateLiveVehicleMarker(newLat, newLng, state.travelMode, heading);
-  state.map.panTo([newLat, newLng], { animate: true, duration: 0.4 });
+
+  // Auto-follow user camera ONLY if user has NOT panned/zoomed away to inspect destination!
+  if (!state.navTracking.userPannedAway) {
+    state.map.panTo([newLat, newLng], { animate: true, duration: 0.4 });
+  }
 
   // Update Top Guidance Bar with live measured meters
   updateLiveTurnGuidance(newLat, newLng);
@@ -2095,7 +2125,11 @@ function showDestinationReached() {
 function stopLiveNavigation(hideHud = true) {
   state.navTracking.active = false;
   state.navTracking.isMoving = false;
+  state.navTracking.userPannedAway = false;
   state.navAnimation.active = false;
+
+  const recenterBtn = document.getElementById('recenterNavBtn');
+  if (recenterBtn) recenterBtn.style.display = 'none';
 
   // Clear GPS watcher
   if (state.navTracking.watchId !== null) {
@@ -2279,11 +2313,15 @@ function setupWaypointAutocomplete(inputId, dropdownId, pointType) {
             const matchThana = thana.toLowerCase().includes(qLower) || 
                                (matchedBn && thana.includes(matchedBn));
             if (matchThana) {
+              const coordKey = d.en ? `${d.en}:${thana}` : thana;
+              const authenticCoord = (typeof BD_THANA_COORDS !== 'undefined' && (BD_THANA_COORDS[coordKey] || BD_THANA_COORDS[thana]));
+              const thLat = authenticCoord ? authenticCoord.lat : d.lat;
+              const thLng = authenticCoord ? authenticCoord.lng : d.lng;
               localMatches.push({
                 name: thana,
                 sub: `${d.name} জেলা, বাংলাদেশ`,
-                lat: d.lat,
-                lng: d.lng,
+                lat: thLat,
+                lng: thLng,
                 icon: 'fa-location-dot',
                 fullQuery: `${thana}, ${d.name}, Bangladesh`
               });
@@ -2824,13 +2862,22 @@ window.zoomToThanaCore = function(lat, lng) {
 };
 
 window.routeToThanaPlace = function(thanaName, distName) {
-  const destInput = document.getElementById('routeEndInput');
+  const destInput = document.getElementById('endInput') || document.getElementById('routeEndInput');
   const routePanel = document.getElementById('routePanel');
   if (destInput && routePanel) {
     destInput.value = `${thanaName}, ${distName}`;
+    const coordKey = `${distName}:${thanaName}`;
+    const authenticCoord = (typeof BD_THANA_COORDS !== 'undefined' && (BD_THANA_COORDS[coordKey] || BD_THANA_COORDS[thanaName]));
+    if (authenticCoord) {
+      state.routePoints.end = { lat: authenticCoord.lat, lng: authenticCoord.lng, name: `${thanaName}, ${distName}` };
+    }
+    updateRouteMarkers();
     routePanel.classList.add('active');
     document.getElementById('singleDistrictSidebar')?.classList.remove('active');
     showToast(`গন্তব্য সেট করা হয়েছে: ${thanaName}, ${distName}`);
+    if (state.routePoints.start && state.routePoints.end) {
+      calculateRoute();
+    }
   }
 };
 
@@ -3069,11 +3116,18 @@ function activateSingleDistrictMode(district) {
 
   const thanaCount = district.thanas.length;
   district.thanas.forEach((thana, i) => {
-    // Deterministic distributed coordinate offset inside district boundary
-    const angle = (i / thanaCount) * 2 * Math.PI + 0.35;
-    const distFactor = 0.04 + (0.12 * ((i % 3) + 1) / 3);
-    const thanaLat = district.lat + Math.sin(angle) * distFactor * 0.85;
-    const thanaLng = district.lng + Math.cos(angle) * distFactor;
+    // Authentic geographic BBS / OSM Upazila coordinates (100% inside district boundary)
+    const coordKey = district.en ? `${district.en}:${thana}` : thana;
+    const authenticCoord = (typeof BD_THANA_COORDS !== 'undefined' && (BD_THANA_COORDS[coordKey] || BD_THANA_COORDS[thana]));
+    let thanaLat, thanaLng;
+    if (authenticCoord) {
+      thanaLat = authenticCoord.lat;
+      thanaLng = authenticCoord.lng;
+    } else {
+      const angle = (i / thanaCount) * 2 * Math.PI;
+      thanaLat = district.lat + Math.sin(angle) * 0.02;
+      thanaLng = district.lng + Math.cos(angle) * 0.02;
+    }
 
     const pinIcon = L.divIcon({
       className: 'custom-district-thana-icon',
