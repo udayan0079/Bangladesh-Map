@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -102,6 +102,16 @@
     <span class="div-label"><i class="fa-solid fa-compass"></i> বিভাগসমূহ:</span>
     <div class="divisions-list" id="divisionsList">
       <button class="div-chip active" data-div="all">সম্পূর্ণ বাংলাদেশ (Focus)</button>
+      
+      <!-- Direct Single District Selector Button & Dropdown in Quick Bar -->
+      <button class="div-chip district-quick-chip" id="quickDistrictPickBtn" title="একক জেলার ম্যাপ দেখুন (৬৪ জেলা)">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>📍 একক জেলা নির্বাচন (৬৪ জেলা)</span>
+      </button>
+      <select id="quickDistrictSelect" class="quick-district-select" title="সরাসরি যেকোনো জেলা বেছে নিন">
+        <option value="">-- যেকোনো জেলা বেছে নিন --</option>
+      </select>
+
       <button class="div-chip" data-div="dhaka">ঢাকা</button>
       <button class="div-chip" data-div="chattogram">চট্টগ্রাম</button>
       <button class="div-chip" data-div="sylhet">সিলেট</button>
@@ -488,13 +498,6 @@
       <span>শুধুমাত্র বাংলাদেশ অঞ্চল সক্রিয়</span>
     </div>
 
-    <!-- Floating Prominent "কোথায় যেতে চান?" Quick Action Button -->
-    <button class="floating-where-to-go-btn" id="floatingWhereToGoBtn" title="কোথায় যেতে চান? / Where to go?">
-      <span class="btn-ripple-wave"></span>
-      <i class="fa-solid fa-diamond-turn-right"></i>
-      <span data-i18n="whereToGo">কোথায় যেতে চান?</span>
-    </button>
-
     <!-- Quick Highlights Floating Pill -->
     <div class="quick-places-dock">
       <span class="dock-title"><i class="fa-solid fa-star"></i> <span data-i18n="quickPlaces">জনপ্রিয় স্থান:</span></span>
@@ -611,6 +614,6 @@
   <script src="bd_data.js?v=5"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

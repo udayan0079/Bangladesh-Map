@@ -3037,6 +3037,9 @@ function activateSingleDistrictMode(district) {
   const select = document.getElementById('districtSwitchSelect');
   if (select) select.value = district.name;
 
+  const quickSelect = document.getElementById('quickDistrictSelect');
+  if (quickSelect) quickSelect.value = district.name;
+
   // Show Sidebar
   const sidebar = document.getElementById('singleDistrictSidebar');
   if (sidebar) sidebar.classList.add('active');
@@ -3075,6 +3078,10 @@ function exitSingleDistrictMode() {
     state.map.flyTo(BD_CENTER, 7.5, { duration: 1.5 });
   }
 
+  // Reset dropdowns
+  const quickSelect = document.getElementById('quickDistrictSelect');
+  if (quickSelect) quickSelect.value = '';
+
   // Hide sidebar & pill
   document.getElementById('singleDistrictSidebar')?.classList.remove('active');
   const pill = document.getElementById('districtModeFloatingPill');
@@ -3088,6 +3095,39 @@ function setupSingleDistrictModule() {
   const topBtn = document.getElementById('singleDistrictBtn');
   if (topBtn) {
     topBtn.addEventListener('click', openDistrictSelectorModal);
+  }
+
+  // Quick District Pick Button in Divisions Bar
+  const quickPickBtn = document.getElementById('quickDistrictPickBtn');
+  if (quickPickBtn) {
+    quickPickBtn.addEventListener('click', openDistrictSelectorModal);
+  }
+
+  // Quick District Select Dropdown in Divisions Bar
+  const quickSelect = document.getElementById('quickDistrictSelect');
+  if (quickSelect && typeof BD_DISTRICTS !== 'undefined') {
+    quickSelect.innerHTML = '<option value="">📍 সরাসরি জেলা বেছে নিন (৬৪ জেলা)...</option>';
+    const divKeys = ['dhaka', 'chattogram', 'sylhet', 'rajshahi', 'khulna', 'barishal', 'rangpur', 'mymensingh'];
+    divKeys.forEach(dk => {
+      const group = document.createElement('optgroup');
+      group.label = getDivisionName(dk);
+      const dists = BD_DISTRICTS.filter(d => d.div === dk);
+      dists.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.name;
+        opt.textContent = `${d.name} (${d.en}) - ${d.thanas.length} থানা`;
+        group.appendChild(opt);
+      });
+      quickSelect.appendChild(group);
+    });
+
+    quickSelect.addEventListener('change', () => {
+      const val = quickSelect.value;
+      if (val) {
+        const d = BD_DISTRICTS.find(item => item.name === val);
+        if (d) activateSingleDistrictMode(d);
+      }
+    });
   }
 
   // Close Modal button

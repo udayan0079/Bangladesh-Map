@@ -1739,60 +1739,44 @@ body {
   color: white !important;
 }
 
-/* Floating Prominent "কোথায় যেতে চান?" Button on Map */
-.floating-where-to-go-btn {
-  position: absolute;
-  bottom: 80px;
-  left: 20px;
-  z-index: 1000;
-  display: flex;
+/* Quick District Selector in Divisions Bar */
+.district-quick-chip {
+  background: linear-gradient(135deg, #0284c7, #059669) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3) !important;
+  display: inline-flex !important;
   align-items: center;
-  gap: 10px;
-  padding: 12px 22px;
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-radius: var(--border-radius-full);
-  box-shadow: 0 8px 25px rgba(5, 150, 105, 0.45);
-  font-size: 0.95rem;
-  font-weight: 700;
+  gap: 6px;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(8px);
+  white-space: nowrap;
 }
 
-.floating-where-to-go-btn:hover {
-  transform: translateY(-3px) scale(1.04);
-  box-shadow: 0 12px 30px rgba(5, 150, 105, 0.6);
-  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+.district-quick-chip:hover {
+  background: linear-gradient(135deg, #0369a1, #047857) !important;
+  transform: translateY(-1px);
 }
 
-.btn-ripple-wave {
-  position: absolute;
-  inset: -4px;
-  border-radius: inherit;
-  border: 2px solid rgba(16, 185, 129, 0.6);
-  animation: ripple-wave 2s infinite;
-  pointer-events: none;
+.quick-district-select {
+  padding: 5px 12px;
+  border-radius: var(--border-radius-full);
+  border: 1.5px solid #059669;
+  background: #ffffff;
+  color: #065f46;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: var(--transition-fast);
+  max-width: 210px;
 }
 
-@keyframes ripple-wave {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.15, 1.35); opacity: 0; }
-}
-
-@media (max-width: 768px) {
-  .floating-where-to-go-btn {
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 18px;
-    font-size: 0.86rem;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  }
-  .floating-where-to-go-btn:hover {
-    transform: translateX(-50%) translateY(-2px);
-  }
+.quick-district-select:hover, .quick-district-select:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
 }
 
 /* Popular Routes Section */
