@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -64,6 +64,12 @@
         <span class="btn-live-dot"></span>
         <i class="fa-solid fa-route"></i>
         <span data-i18n="whereToGo">কোথায় যেতে চান?</span>
+      </button>
+
+      <!-- Dedicated Single District Isolated Map Button -->
+      <button id="singleDistrictBtn" class="action-btn district-btn" title="একক জেলা ম্যাপ (শুধুমাত্র নির্বাচিত জেলার মানচিত্র)">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span data-i18n="districtMapBtn">একক জেলা ম্যাপ</span>
       </button>
 
       <button id="thanaDirectoryToggleBtn" class="action-btn" title="সকল জেলা ও থানার তালিকা">
@@ -179,6 +185,136 @@
         </div>
       </div>
     </aside>
+
+    <!-- =================================================================== -->
+    <!-- DEDICATED SINGLE DISTRICT SECTION (একক জেলা ম্যাপ এক্সপ্লোরার)      -->
+    <!-- শুধুমাত্র নির্বাচিত জেলার বাউন্ডারির ভেতরের ম্যাপ ও পূর্ণাঙ্গ বিবরণ -->
+    <!-- =================================================================== -->
+    <aside class="single-district-sidebar" id="singleDistrictSidebar">
+      <div class="sheet-drag-handle"></div>
+      <div class="district-sidebar-header">
+        <div class="district-header-main">
+          <div class="district-badge-icon">
+            <i class="fa-solid fa-map-location-dot"></i>
+          </div>
+          <div class="district-header-text">
+            <div class="district-sub-badge" id="singleDistrictDivBadge">ঢাকা বিভাগ</div>
+            <h2 id="singleDistrictName">ঢাকা জেলা</h2>
+            <span class="district-en-title" id="singleDistrictEnName">Dhaka District</span>
+          </div>
+        </div>
+        <button class="close-district-btn" id="exitDistrictModeBtn" title="সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যান">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- District Switcher Select Dropdown -->
+      <div class="district-switch-bar">
+        <label for="districtSwitchSelect"><i class="fa-solid fa-repeat"></i> জেলা পরিবর্তন করুন:</label>
+        <select id="districtSwitchSelect" class="district-select-control">
+          <!-- Populated dynamically with all 64 districts grouped by 8 divisions -->
+        </select>
+      </div>
+
+      <!-- District Overview Stats Cards -->
+      <div class="district-stats-grid">
+        <div class="dist-stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-landmark"></i></div>
+          <div class="stat-meta">
+            <span class="stat-label">জেলা সদর দপ্তর</span>
+            <strong id="singleDistrictHQ">ঢাকা সদর</strong>
+          </div>
+        </div>
+        <div class="dist-stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-sitemap"></i></div>
+          <div class="stat-meta">
+            <span class="stat-label">মোট থানা / উপজেলা</span>
+            <strong id="singleDistrictThanaCount">১৩ টি থানা</strong>
+          </div>
+        </div>
+        <div class="dist-stat-card full-span">
+          <div class="stat-icon river-icon"><i class="fa-solid fa-water"></i></div>
+          <div class="stat-meta">
+            <span class="stat-label">দিয়ে যাওয়া নদ-নদী</span>
+            <strong id="singleDistrictRivers">বুড়িগঙ্গা, তুরাগ, বালু, শীতলক্ষ্যা নদী</strong>
+          </div>
+        </div>
+        <div class="dist-stat-card full-span">
+          <div class="stat-icon"><i class="fa-solid fa-compass"></i></div>
+          <div class="stat-meta">
+            <span class="stat-label">ভৌগোলিক স্থানাঙ্ক ও এরিয়া সীমা</span>
+            <strong id="singleDistrictCoords">২৩.৮১° N, ৯০.৪১° E (লকড জোন)</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons: Route to this district & Reset -->
+      <div class="district-action-buttons">
+        <button id="routeToDistrictBtn" class="district-btn-primary">
+          <i class="fa-solid fa-diamond-turn-right"></i>
+          <span>এই জেলায় যাওয়ার রুট দেখুন</span>
+        </button>
+        <button id="backToAllBdBtn" class="district-btn-outline">
+          <i class="fa-solid fa-earth-asia"></i>
+          <span>সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরুন</span>
+        </button>
+      </div>
+
+      <!-- Thanas Grid & Interactive Thana Navigator -->
+      <div class="district-thanas-section">
+        <div class="thanas-section-header">
+          <h4><i class="fa-solid fa-location-crosshairs text-emerald"></i> সকল থানা ও উপজেলা <span class="thana-tip">(যেকোনোটিতে ক্লিক করে জুম করুন)</span></h4>
+        </div>
+        <div class="district-thanas-grid" id="singleDistrictThanasList">
+          <!-- Dynamically populated thana chips -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- 64-District Selector Modal Dialog -->
+    <div class="district-modal-overlay" id="districtSelectorModal">
+      <div class="district-modal-container">
+        <div class="district-modal-header">
+          <div class="modal-title-wrap">
+            <i class="fa-solid fa-map-location-dot text-emerald"></i>
+            <div>
+              <h3>একক জেলা ম্যাপ নির্বাচন করুন</h3>
+              <p>৬৪টি জেলার মধ্য থেকে আপনার পছন্দের জেলা বেছে নিন—শুধুমাত্র ওই জেলার ম্যাপ দেখাবে</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" id="closeDistrictModalBtn"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="district-modal-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="districtModalSearchInput" placeholder="জেলার নাম লিখুন (যেমন: ঢাকা, বগুড়া, সিলেট, কক্সবাজার, যশোর)..." autocomplete="off">
+        </div>
+        <!-- Division Filter Tabs -->
+        <div class="district-div-tabs" id="districtDivTabs">
+          <button class="div-tab active" data-div="all">সকল বিভাগ (৬৪)</button>
+          <button class="div-tab" data-div="dhaka">ঢাকা</button>
+          <button class="div-tab" data-div="chattogram">চট্টগ্রাম</button>
+          <button class="div-tab" data-div="sylhet">সিলেট</button>
+          <button class="div-tab" data-div="rajshahi">রাজশাহী</button>
+          <button class="div-tab" data-div="khulna">খুলনা</button>
+          <button class="div-tab" data-div="barishal">বরিশাল</button>
+          <button class="div-tab" data-div="rangpur">রংপুর</button>
+          <button class="div-tab" data-div="mymensingh">ময়মনসিংহ</button>
+        </div>
+        <!-- 64 Districts Grid -->
+        <div class="district-cards-grid" id="districtCardsGrid">
+          <!-- Dynamically generated 64 district cards -->
+        </div>
+      </div>
+    </div>
+
+    <!-- District Mode Active Status Floating Pill -->
+    <div class="district-mode-floating-pill" id="districtModeFloatingPill" style="display: none;">
+      <div class="pill-pulse-dot"></div>
+      <span id="districtPillText">ঢাকা জেলা একক ম্যাপ সক্রিয়</span>
+      <button id="pillExitDistrictBtn" title="সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরুন">
+        <i class="fa-solid fa-arrow-left"></i> সব জেলা
+      </button>
+    </div>
 
     <!-- Route & Distance Calculator Sidebar Panel -->
     <aside class="route-panel" id="routePanel">
@@ -442,6 +578,10 @@
         <i class="fa-solid fa-diamond-turn-right"></i>
         <span data-i18n="mobileWhereToGo">কোথায় যাবেন?</span>
       </button>
+      <button class="mobile-nav-btn" id="mobileDistrictBtn" title="একক জেলা ম্যাপ">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>একক জেলা</span>
+      </button>
       <button class="mobile-nav-btn" id="mobileThanaBtn" title="থানা ও জেলা ডিরেক্টরি">
         <i class="fa-solid fa-sitemap"></i>
         <span data-i18n="thanaDistrict">থানা-জেলা</span>
@@ -471,6 +611,6 @@
   <script src="bd_data.js?v=5"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

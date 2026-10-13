@@ -58,6 +58,12 @@ const state = {
     steps: [],
     totalDistanceKm: 0,
     totalMinutes: 0
+  },
+  districtFocus: {
+    active: false,
+    district: null,
+    markers: [],
+    boundaryLayer: null
   }
 };
 
@@ -139,7 +145,8 @@ const I18N = {
     rerouteBtn: 'নতুন রুট',
     gpsStatusLabel: 'জিপিএস অবস্থান',
     stationaryStatus: 'দাঁড়িয়ে আছেন (০ কিমি/ঘণ্টা)',
-    movingStatus: 'চলমান'
+    movingStatus: 'চলমান',
+    districtMapBtn: 'একক জেলা ম্যাপ'
   },
   en: {
     appTitle: 'Bangladesh Map',
@@ -148,6 +155,7 @@ const I18N = {
     searchPlaceholder: 'Search any thana, village, river or place...',
     whereToGo: 'Where to go?',
     mobileWhereToGo: 'Where to go?',
+    districtMapBtn: 'District Only Map',
     thanaDistrict: 'Thana & District',
     rivers: 'Rivers',
     routeDist: 'Route & Directions',
@@ -541,6 +549,9 @@ function setupThanaDirectory() {
             ${district.name} জেলা (${district.en})
           </span>
           <span class="dist-count">${toBanglaNum(district.thanas.length)} টি থানা</span>
+          <button class="btn-isolate-district" title="শুধুমাত্র এই জেলার ম্যাপ দেখুন">
+            <i class="fa-solid fa-map-location-dot"></i> একক ম্যাপ
+          </button>
         </div>
         <div class="thanas-grid">
           ${district.thanas.map(thana => `
@@ -550,6 +561,13 @@ function setupThanaDirectory() {
           `).join('')}
         </div>
       `;
+
+      // Isolate District Mode Button Handler
+      card.querySelector('.btn-isolate-district')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        panel.classList.remove('active');
+        activateSingleDistrictMode(district);
+      });
 
       // Click on District Header flies to District Center
       card.querySelector('.district-header').addEventListener('click', () => {
@@ -2685,6 +2703,443 @@ function setupMobileNav() {
   document.getElementById('closeThanaPanelBtn')?.addEventListener('click', () => {
     mThanaBtn?.classList.remove('active');
   });
+
+  const mDistrictBtn = document.getElementById('mobileDistrictBtn');
+  if (mDistrictBtn) {
+    mDistrictBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDistrictSelectorModal();
+    });
+  }
+}
+
+// =====================================================================
+// DEDICATED SINGLE DISTRICT SECTION (একক জেলা ম্যাপ এক্সপ্লোরার)
+// শুধুমাত্র নির্বাচিত জেলার ম্যাপ দৃশ্যমান থাকবে ও পূর্ণাঙ্গ বিবরণ দেখাবে
+// =====================================================================
+
+// Major Rivers per Bangladesh District Mapping
+const DISTRICT_RIVERS = {
+  'ঢাকা': ['বুড়িগঙ্গা নদী', 'তুরাগ নদী', 'বালু নদী', 'শীতলক্ষ্যা নদী', 'ধলেশ্বরী নদী'],
+  'নারায়ণগঞ্জ': ['শীতলক্ষ্যা নদী', 'মেঘনা নদী', 'ধলেশ্বরী নদী'],
+  'গাজীপুর': ['তুরাগ নদী', 'বালু নদী', 'শীতলক্ষ্যা নদী'],
+  'মুন্সীগঞ্জ': ['পদ্মা নদী', 'মেঘনা নদী', 'ধলেশ্বরী নদী'],
+  'মানিকগঞ্জ': ['পদ্মা নদী', 'যমুনা নদী', 'ধলেশ্বরী নদী', 'কালিগঙ্গা নদী'],
+  'ফরিদপুর': ['পদ্মা নদী', 'মধুমতী নদী', 'কুমার নদী', 'আড়িয়াল খাঁ নদী'],
+  'রাজবাড়ী': ['পদ্মা নদী', 'গড়াই নদী', 'চন্দনা নদী'],
+  'মাদারীপুর': ['পদ্মা নদী', 'আড়িয়াল খাঁ নদী', 'কুমার নদী'],
+  'শরীয়তপুর': ['পদ্মা নদী', 'মেঘনা নদী', 'কীর্তিনাশা নদী'],
+  'টাঙ্গাইল': ['যমুনা নদী', 'ধলেশ্বরী নদী', 'লৌহজং নদী'],
+  'কিশোরগঞ্জ': ['মেঘনা নদী', 'পুরাতন ব্রহ্মপুত্র নদী', 'ধনু নদী'],
+  'নরসিংদী': ['মেঘনা নদী', 'ব্রহ্মপুত্র নদী', 'শীতলক্ষ্যা নদী'],
+  'গোপালগঞ্জ': ['মধুমতী নদী', 'কুমার নদী'],
+  'চট্টগ্রাম': ['কর্ণফুলী নদী', 'হালদা নদী', 'সাঙ্গু নদী'],
+  'কক্সবাজার': ['নাফ নদী', 'মাতামুহুরী নদী', 'বাঁকখালী নদী'],
+  'কুমিল্লা': ['গোমতী নদী', 'মেঘনা নদী', 'ডাকাতিয়া নদী'],
+  'চাঁদপুর': ['পদ্মা নদী', 'মেঘনা নদী', 'ডাকাতিয়া নদী (ত্রিনদী মোহনা)'],
+  'ব্রাহ্মণবাড়িয়া': ['তিতাস নদী', 'মেঘনা নদী'],
+  'নোয়াখালী': ['মেঘনা নদী', 'ডাকাতিয়া নদী'],
+  'ফেনী': ['ফেনী নদী', 'মুহুরী নদী', 'সিলোনিয়া নদী'],
+  'লক্ষ্মীপুর': ['মেঘনা নদী', 'ডাকাতিয়া নদী'],
+  'রাঙ্গামাটি': ['কর্ণফুলী নদী', 'কাচালং নদী'],
+  'বান্দরবান': ['সাঙ্গু নদী', 'মাতামুহুরী নদী'],
+  'খাগড়াছড়ি': ['চেঙ্গী নদী', 'মাইনী নদী', 'ফেনী নদী'],
+  'সিলেট': ['সুরমা নদী', 'কুশিয়ারা নদী', 'পিয়াইন নদী', 'সারি নদী'],
+  'সুনামগঞ্জ': ['সুরমা নদী', 'কুশিয়ারা নদী', 'যাদুকাটা নদী'],
+  'মৌলভীবাজার': ['মনু নদী', 'কুশিয়ারা নদী', 'ধলাই নদী'],
+  'হবিগঞ্জ': ['কুশিয়ারা নদী', 'খোয়াই নদী', 'কালনী নদী'],
+  'রাজশাহী': ['পদ্মা নদী', 'শিব নদী', 'বারনই নদী'],
+  'চাঁপাইনবাবগঞ্জ': ['পদ্মা নদী', 'মহানন্দা নদী', 'পুনর্ভবা নদী'],
+  'বগুড়া': ['করতোয়া নদী', 'যমুনা নদী', 'বাঙ্গালী নদী', 'নাগর নদী'],
+  'পাবনা': ['পদ্মা নদী', 'যমুনা নদী', 'ইছামতী নদী'],
+  'সিরাজগঞ্জ': ['যমুনা নদী', 'করতোয়া নদী', 'হুরাসাগর নদী'],
+  'নাটোর': ['নাগর নদী', 'আত্রাই নদী', 'বারনই নদী'],
+  'নওগাঁ': ['আত্রাই নদী', 'পুনর্ভবা নদী', 'যমুনা নদী (ছোট)'],
+  'জয়পুরহাট': ['ছোট যমুনা নদী', 'তুলসীগঙ্গা নদী'],
+  'খুলনা': ['রূপসা নদী', 'ভৈরব নদী', 'পশুর নদী', 'শিবসা নদী'],
+  'যশোর': ['ভৈরব নদী', 'কপোতাক্ষ নদ', 'চিত্রা নদী'],
+  'কুষ্টিয়া': ['পদ্মা নদী', 'গড়াই নদী', 'কালিগঙ্গা নদী'],
+  'সাতক্ষীরা': ['কপোতাক্ষ নদ', 'ইছামতী নদী', 'কালিন্দী নদী', 'রায়মঙ্গল নদী'],
+  'বাগেরহাট': ['পশুর নদী', 'ভৈরব নদী', 'মধুমতী নদী', 'বালেশ্বর নদী'],
+  'ঝিনাইদহ': ['নবগঙ্গা নদী', 'চিত্রা নদী', 'কপোতাক্ষ নদ'],
+  'চুয়াডাঙ্গা': ['মাথাভাঙ্গা নদী', 'কুমার নদী', 'চিত্রা নদী'],
+  'মেহেরপুর': ['ভৈরব নদী', 'মাথাভাঙ্গা নদী'],
+  'মাগুরা': ['মধুমতী নদী', 'নবগঙ্গা নদী', 'কুমার নদী'],
+  'নড়াইল': ['চিত্রা নদী', 'নবগঙ্গা নদী', 'মধুমতী নদী'],
+  'বরিশাল': ['কীর্তনখোলা নদী', 'মেঘনা নদী', 'সুগন্ধা নদী', 'আড়িয়াল খাঁ নদী'],
+  'পটুয়াখালী': ['পায়রা নদী', 'তেঁতুলিয়া নদী', 'লোহালিয়া নদী'],
+  'ভোলা': ['মেঘনা নদী', 'তেঁতুলিয়া নদী', 'ইলিশা নদী'],
+  'পিরোজপুর': ['বলেশ্বর নদী', 'সন্ধ্যা নদী', 'কালিগঙ্গা নদী'],
+  'বরগুনা': ['পায়রা নদী', 'বিষখালী নদী', 'বলেশ্বর নদী'],
+  'ঝালকাঠি': ['সুগন্ধা নদী', 'বিষখালী নদী', 'ধানসিঁড়ি নদী'],
+  'রংপুর': ['তিস্তা নদী', 'ঘাঘট নদী', 'যমুনেশ্বরী নদী'],
+  'দিনাজপুর': ['পুনর্ভবা নদী', 'আত্রাই নদী', 'ঢেপা নদী'],
+  'কুড়িগ্রাম': ['ব্রহ্মপুত্র নদী', 'তিস্তা নদী', 'ধরলা নদী', 'দুধকুমার নদী'],
+  'গাইবান্ধা': ['ব্রহ্মপুত্র নদী', 'তিস্তা নদী', 'ঘাঘট নদী', 'করতোয়া নদী'],
+  'নীলফামারী': ['তিস্তা নদী', 'বুড়িতিস্তা নদী', 'ঘাঘট নদী'],
+  'লালমনিরহাট': ['তিস্তা নদী', 'ধরলা নদী', 'সানিয়াজান নদী'],
+  'ঠাকুরগাঁও': ['টাঙ্গন নদী', 'কুলিক নদী', 'নাগর নদী'],
+  'পঞ্চগড়': ['করতোয়া নদী', 'তিস্তা নদী', 'মহানন্দা নদী', 'ডাহুক নদী'],
+  'ময়মনসিংহ': ['পুরাতন ব্রহ্মপুত্র নদী', 'কংস নদী', 'সুতিয়া নদী'],
+  'জামালপুর': ['যমুনা নদী', 'পুরাতন ব্রহ্মপুত্র নদী', 'ঝিনাই নদী'],
+  'নেত্রকোনা': ['কংস নদী', 'সোমেশ্বরী নদী', 'মগড়া নদী', 'ধনু নদী'],
+  'শেরপুর': ['পুরাতন ব্রহ্মপুত্র নদী', 'ভোগাই নদী', 'মালিঝি নদী']
+};
+
+function getDivisionName(divKey) {
+  const map = {
+    dhaka: 'ঢাকা বিভাগ',
+    chattogram: 'চট্টগ্রাম বিভাগ',
+    sylhet: 'সিলেট বিভাগ',
+    rajshahi: 'রাজশাহী বিভাগ',
+    khulna: 'খুলনা বিভাগ',
+    barishal: 'বরিশাল বিভাগ',
+    rangpur: 'রংপুর বিভাগ',
+    mymensingh: 'ময়মনসিংহ বিভাগ'
+  };
+  return map[divKey] || 'বাংলাদেশ';
+}
+
+// Global functions for marker popups
+window.zoomToThanaCore = function(lat, lng) {
+  if (state.map) {
+    state.map.flyTo([lat, lng], 14.5, { duration: 1.2 });
+  }
+};
+
+window.routeToThanaPlace = function(thanaName, distName) {
+  const destInput = document.getElementById('routeEndInput');
+  const routePanel = document.getElementById('routePanel');
+  if (destInput && routePanel) {
+    destInput.value = `${thanaName}, ${distName}`;
+    routePanel.classList.add('active');
+    document.getElementById('singleDistrictSidebar')?.classList.remove('active');
+    showToast(`গন্তব্য সেট করা হয়েছে: ${thanaName}, ${distName}`);
+  }
+};
+
+function openDistrictSelectorModal() {
+  const modal = document.getElementById('districtSelectorModal');
+  if (modal) {
+    modal.classList.add('active');
+    renderDistrictModalCards('all', '');
+  }
+}
+
+function closeDistrictSelectorModal() {
+  const modal = document.getElementById('districtSelectorModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+function renderDistrictModalCards(divFilter = 'all', searchQuery = '') {
+  const container = document.getElementById('districtCardsGrid');
+  if (!container || typeof BD_DISTRICTS === 'undefined') return;
+
+  container.innerHTML = '';
+  const query = searchQuery.trim().toLowerCase();
+
+  const filtered = BD_DISTRICTS.filter(d => {
+    const matchesDiv = divFilter === 'all' || d.div === divFilter;
+    const matchesSearch = !query || 
+      d.name.toLowerCase().includes(query) || 
+      d.en.toLowerCase().includes(query);
+    return matchesDiv && matchesSearch;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="grid-column:1/-1; padding:24px; text-align:center; color:#64748b;">কোনো জেলা পাওয়া যায়নি।</div>';
+    return;
+  }
+
+  filtered.forEach(district => {
+    const card = document.createElement('div');
+    card.className = 'district-pick-card';
+    card.innerHTML = `
+      <span class="pick-name">${district.name} জেলা</span>
+      <span class="pick-en">${district.en} District • ${getDivisionName(district.div)}</span>
+      <span class="pick-badge">
+        <i class="fa-solid fa-sitemap"></i> ${toBanglaNum(district.thanas.length)} টি থানা
+      </span>
+    `;
+
+    card.addEventListener('click', () => {
+      closeDistrictSelectorModal();
+      activateSingleDistrictMode(district);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function populateDistrictSwitchDropdown() {
+  const select = document.getElementById('districtSwitchSelect');
+  if (!select || typeof BD_DISTRICTS === 'undefined') return;
+
+  select.innerHTML = '';
+
+  const divKeys = ['dhaka', 'chattogram', 'sylhet', 'rajshahi', 'khulna', 'barishal', 'rangpur', 'mymensingh'];
+  divKeys.forEach(dk => {
+    const group = document.createElement('optgroup');
+    group.label = getDivisionName(dk);
+
+    const distsInDiv = BD_DISTRICTS.filter(d => d.div === dk);
+    distsInDiv.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.name;
+      opt.textContent = `${d.name} (${d.en}) - ${d.thanas.length} থানা`;
+      group.appendChild(opt);
+    });
+
+    select.appendChild(group);
+  });
+
+  select.addEventListener('change', () => {
+    const chosenName = select.value;
+    const found = BD_DISTRICTS.find(d => d.name === chosenName);
+    if (found) {
+      activateSingleDistrictMode(found);
+    }
+  });
+}
+
+function activateSingleDistrictMode(district) {
+  if (!district || !state.map) return;
+
+  // Close other open panels
+  document.getElementById('thanaPanel')?.classList.remove('active');
+  document.getElementById('routePanel')?.classList.remove('active');
+  document.getElementById('layersMenu')?.classList.remove('active');
+
+  state.districtFocus.active = true;
+  state.districtFocus.district = district;
+
+  // Clear previous district markers & halos
+  if (state.districtFocus.markers && state.districtFocus.markers.length > 0) {
+    state.districtFocus.markers.forEach(m => state.map.removeLayer(m));
+    state.districtFocus.markers = [];
+  }
+  if (state.districtFocus.boundaryLayer) {
+    try { state.map.removeLayer(state.districtFocus.boundaryLayer); } catch(e){}
+    state.districtFocus.boundaryLayer = null;
+  }
+
+  // Strict District Bounding Box: Lock camera strictly inside this district!
+  const padLat = 0.22;
+  const padLng = 0.28;
+  const districtBounds = [
+    [district.lat - padLat, district.lng - padLng],
+    [district.lat + padLat, district.lng + padLng]
+  ];
+
+  // Restrict camera to this district only
+  state.map.fitBounds(districtBounds, { padding: [35, 35], maxZoom: 12 });
+  state.map.setMinZoom(9.5);
+  state.map.setMaxBounds(districtBounds);
+
+  // Draw glowing emerald territorial ring around the district
+  state.districtFocus.boundaryLayer = L.circle([district.lat, district.lng], {
+    radius: 26000, // ~26 km radius
+    color: '#059669',
+    weight: 3.5,
+    dashArray: '8, 8',
+    fillColor: '#10b981',
+    fillOpacity: 0.04,
+    interactive: false
+  }).addTo(state.map);
+
+  // Plot custom interactive markers for each thana of this district
+  const thanasGridContainer = document.getElementById('singleDistrictThanasList');
+  if (thanasGridContainer) thanasGridContainer.innerHTML = '';
+
+  const thanaCount = district.thanas.length;
+  district.thanas.forEach((thana, i) => {
+    // Deterministic distributed coordinate offset inside district boundary
+    const angle = (i / thanaCount) * 2 * Math.PI + 0.35;
+    const distFactor = 0.04 + (0.12 * ((i % 3) + 1) / 3);
+    const thanaLat = district.lat + Math.sin(angle) * distFactor * 0.85;
+    const thanaLng = district.lng + Math.cos(angle) * distFactor;
+
+    const pinIcon = L.divIcon({
+      className: 'custom-district-thana-icon',
+      html: `
+        <div class="district-thana-pin">
+          <div class="thana-pin-bubble">
+            <i class="fa-solid fa-location-dot"></i>
+            <span>${thana}</span>
+          </div>
+          <div class="thana-pin-arrow"></div>
+        </div>
+      `,
+      iconSize: [110, 34],
+      iconAnchor: [55, 34]
+    });
+
+    const marker = L.marker([thanaLat, thanaLng], { icon: pinIcon }).addTo(state.map);
+    marker.bindPopup(`
+      <div style="font-family:'Hind Siliguri',sans-serif; min-width:180px; padding:4px;">
+        <div style="font-weight:700; color:#065f46; font-size:1rem; margin-bottom:4px;">
+          <i class="fa-solid fa-location-dot"></i> ${thana} থানা
+        </div>
+        <div style="font-size:0.82rem; color:#64748b; margin-bottom:8px;">
+          ${district.name} জেলা (${getDivisionName(district.div)})
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="window.zoomToThanaCore(${thanaLat}, ${thanaLng})" style="flex:1; padding:5px 8px; background:#059669; color:#fff; border:none; border-radius:6px; font-size:0.75rem; font-weight:600; cursor:pointer;">
+            <i class="fa-solid fa-magnifying-glass-plus"></i> গভীর জুম
+          </button>
+          <button onclick="window.routeToThanaPlace('${thana}', '${district.name}')" style="flex:1; padding:5px 8px; background:#0284c7; color:#fff; border:none; border-radius:6px; font-size:0.75rem; font-weight:600; cursor:pointer;">
+            <i class="fa-solid fa-diamond-turn-right"></i> রুট
+          </button>
+        </div>
+      </div>
+    `);
+
+    state.districtFocus.markers.push(marker);
+
+    // Add thana card in sidebar
+    if (thanasGridContainer) {
+      const btn = document.createElement('button');
+      btn.className = 'district-thana-card';
+      btn.innerHTML = `<i class="fa-solid fa-location-dot text-emerald"></i> <span>${thana}</span>`;
+      btn.addEventListener('click', () => {
+        state.map.flyTo([thanaLat, thanaLng], 14.5, { duration: 1.2 });
+        marker.openPopup();
+      });
+      thanasGridContainer.appendChild(btn);
+    }
+  });
+
+  // Populate Sidebar Header & Overview Stats
+  const nameEl = document.getElementById('singleDistrictName');
+  const enEl = document.getElementById('singleDistrictEnName');
+  const divBadge = document.getElementById('singleDistrictDivBadge');
+  const hqEl = document.getElementById('singleDistrictHQ');
+  const countEl = document.getElementById('singleDistrictThanaCount');
+  const riversEl = document.getElementById('singleDistrictRivers');
+  const coordsEl = document.getElementById('singleDistrictCoords');
+
+  if (nameEl) nameEl.innerText = `${district.name} জেলা`;
+  if (enEl) enEl.innerText = `${district.en} District`;
+  if (divBadge) divBadge.innerText = getDivisionName(district.div);
+  if (hqEl) hqEl.innerText = `${district.name} সদর`;
+  if (countEl) countEl.innerText = `${toBanglaNum(district.thanas.length)} টি থানা`;
+  if (riversEl) {
+    const rList = DISTRICT_RIVERS[district.name];
+    riversEl.innerText = rList && rList.length > 0 ? rList.join(', ') : 'স্থানীয় শাখা নদী ও খাল';
+  }
+  if (coordsEl) {
+    coordsEl.innerText = `${toBanglaNum(district.lat.toFixed(2))}° N, ${toBanglaNum(district.lng.toFixed(2))}° E (লকড জোন)`;
+  }
+
+  // Sync Dropdown Select
+  const select = document.getElementById('districtSwitchSelect');
+  if (select) select.value = district.name;
+
+  // Show Sidebar
+  const sidebar = document.getElementById('singleDistrictSidebar');
+  if (sidebar) sidebar.classList.add('active');
+
+  // Show Floating Status Pill
+  const pill = document.getElementById('districtModeFloatingPill');
+  const pillText = document.getElementById('districtPillText');
+  if (pill && pillText) {
+    pillText.innerText = `${district.name} জেলা একক ম্যাপ সক্রিয়`;
+    pill.style.display = 'flex';
+  }
+
+  showToast(`${district.name} জেলার একক ম্যাপ ও পূর্ণাঙ্গ বিবরণ সক্রিয় করা হয়েছে।`);
+}
+
+function exitSingleDistrictMode() {
+  if (!state.districtFocus.active && !state.districtFocus.district) return;
+
+  state.districtFocus.active = false;
+  state.districtFocus.district = null;
+
+  // Clear markers & boundary layer
+  if (state.districtFocus.markers && state.districtFocus.markers.length > 0) {
+    state.districtFocus.markers.forEach(m => state.map.removeLayer(m));
+    state.districtFocus.markers = [];
+  }
+  if (state.districtFocus.boundaryLayer) {
+    try { state.map.removeLayer(state.districtFocus.boundaryLayer); } catch(e){}
+    state.districtFocus.boundaryLayer = null;
+  }
+
+  // Restore map camera to full Bangladesh
+  if (state.map) {
+    state.map.setMinZoom(7);
+    state.map.setMaxBounds(BD_BOUNDS);
+    state.map.flyTo(BD_CENTER, 7.5, { duration: 1.5 });
+  }
+
+  // Hide sidebar & pill
+  document.getElementById('singleDistrictSidebar')?.classList.remove('active');
+  const pill = document.getElementById('districtModeFloatingPill');
+  if (pill) pill.style.display = 'none';
+
+  showToast('সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যাওয়া হয়েছে।');
+}
+
+function setupSingleDistrictModule() {
+  // Top Navbar button
+  const topBtn = document.getElementById('singleDistrictBtn');
+  if (topBtn) {
+    topBtn.addEventListener('click', openDistrictSelectorModal);
+  }
+
+  // Close Modal button
+  const closeMBtn = document.getElementById('closeDistrictModalBtn');
+  if (closeMBtn) {
+    closeMBtn.addEventListener('click', closeDistrictSelectorModal);
+  }
+
+  // Modal Search Input
+  const mSearch = document.getElementById('districtModalSearchInput');
+  if (mSearch) {
+    mSearch.addEventListener('input', () => {
+      const activeTab = document.querySelector('#districtDivTabs .div-tab.active');
+      const divFilter = activeTab ? activeTab.getAttribute('data-div') : 'all';
+      renderDistrictModalCards(divFilter, mSearch.value);
+    });
+  }
+
+  // Modal Division Filter Tabs
+  const divTabs = document.querySelectorAll('#districtDivTabs .div-tab');
+  divTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      divTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const divKey = tab.getAttribute('data-div');
+      const mSearch = document.getElementById('districtModalSearchInput');
+      renderDistrictModalCards(divKey, mSearch ? mSearch.value : '');
+    });
+  });
+
+  // Exit District Mode buttons
+  document.getElementById('exitDistrictModeBtn')?.addEventListener('click', exitSingleDistrictMode);
+  document.getElementById('backToAllBdBtn')?.addEventListener('click', exitSingleDistrictMode);
+  document.getElementById('pillExitDistrictBtn')?.addEventListener('click', exitSingleDistrictMode);
+
+  // Route to District Button
+  document.getElementById('routeToDistrictBtn')?.addEventListener('click', () => {
+    const curDist = state.districtFocus.district;
+    if (curDist) {
+      const destInput = document.getElementById('routeEndInput');
+      const routePanel = document.getElementById('routePanel');
+      if (destInput && routePanel) {
+        destInput.value = `${curDist.name} সদর`;
+        routePanel.classList.add('active');
+        document.getElementById('singleDistrictSidebar')?.classList.remove('active');
+        showToast(`রুট প্ল্যানারে গন্তব্য সেট করা হয়েছে: ${curDist.name} সদর`);
+      }
+    }
+  });
+
+  // Populate Switcher Dropdown
+  populateDistrictSwitchDropdown();
 }
 
 // Application Initialization
@@ -2702,4 +3157,5 @@ window.addEventListener('DOMContentLoaded', () => {
   setupFullscreen();
   setupGlobalShortcuts();
   setupMobileNav();
+  setupSingleDistrictModule();
 });
