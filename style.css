@@ -313,6 +313,32 @@ body {
   transform: translateY(-1px);
 }
 
+.action-btn.home-main-btn {
+  background: #0f172a !important;
+  color: #34d399 !important;
+  border: 1.5px solid #10b981 !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.28) !important;
+  font-weight: 700;
+}
+
+.action-btn.home-main-btn:hover {
+  background: #059669 !important;
+  color: #ffffff !important;
+  border-color: #059669 !important;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.header-brand {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity var(--transition-fast);
+}
+
+.header-brand:hover {
+  opacity: 0.9;
+}
+
 .action-btn.active-tool {
   background: #0284c7;
   color: white;
@@ -2205,20 +2231,29 @@ body {
     background: none;
     border: none;
     color: #475569;
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 600;
-    padding: 5px 0;
+    padding: 4px 1px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: color 0.15s ease;
   }
 
   .mobile-nav-btn i {
-    font-size: 1.12rem;
+    font-size: 1.05rem;
   }
 
   .mobile-nav-btn:active, .mobile-nav-btn.active {
     color: #059669;
+  }
+
+  .mobile-nav-btn#mobileHomeBtn {
+    color: #059669;
+    font-weight: 700;
+  }
+
+  .mobile-nav-btn#mobileHomeBtn.active {
+    color: #047857;
   }
 
   /* Native Mobile Bottom Sheet Drawer for Side Panels */

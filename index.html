@@ -25,12 +25,12 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
   <header class="app-header">
-    <div class="header-brand">
+    <div class="header-brand" id="headerBrand" title="মূল বাংলাদেশ ম্যাপে ফিরে যান (হোম)">
       <div class="brand-logo">
         <i class="fa-solid fa-map-location-dot"></i>
       </div>
@@ -51,18 +51,18 @@
       <div id="searchResults" class="search-dropdown"></div>
     </div>
 
-    <!-- Header Actions -->
+    <!-- Header Actions (Clean, Non-Duplicate Action Controls) -->
     <div class="header-actions">
-      <!-- Language Switcher: Bangla / English -->
-      <button id="langToggleBtn" class="lang-toggle-btn" title="ভাষা পরিবর্তন / Switch Language">
-        <i class="fa-solid fa-globe"></i>
-        <span id="currentLangLabel">English</span>
+      <!-- Universal Master Reset / Home Map Button -->
+      <button id="homeMainMapBtn" class="action-btn home-main-btn" title="যেকোনো অবস্থা থেকে মূল বাংলাদেশ ম্যাপে ফিরে যান (হোম)">
+        <i class="fa-solid fa-house"></i>
+        <span data-i18n="homeMap">মূল বাংলাদেশ</span>
       </button>
 
-      <!-- Prominent "কোথায় যেতে চান?" Button -->
-      <button id="whereToGoBtn" class="action-btn journey-btn pulse-glow" title="কোথায় যেতে চান? (Where to go?)">
+      <!-- Prominent Route & Distance Button -->
+      <button id="whereToGoBtn" class="action-btn journey-btn pulse-glow" title="কোথায় যেতে চান? (রুট প্ল্যানার ও দিকনির্দেশনা)">
         <span class="btn-live-dot"></span>
-        <i class="fa-solid fa-route"></i>
+        <i class="fa-solid fa-diamond-turn-right"></i>
         <span data-i18n="whereToGo">কোথায় যেতে চান?</span>
       </button>
 
@@ -72,27 +72,38 @@
         <span data-i18n="districtMapBtn">একক জেলা ম্যাপ</span>
       </button>
 
+      <!-- Thanas & Districts Directory -->
       <button id="thanaDirectoryToggleBtn" class="action-btn" title="সকল জেলা ও থানার তালিকা">
         <i class="fa-solid fa-sitemap"></i>
         <span data-i18n="thanaDistrict">থানা ও জেলা</span>
       </button>
+
+      <!-- Major Rivers Highlight Toggle -->
       <button id="riversToggleBtn" class="action-btn" title="প্রধান নদ-নদী হাইলাইট">
         <i class="fa-solid fa-water"></i>
         <span data-i18n="rivers">নদ-নদী</span>
       </button>
-      <button id="routeModeToggleBtn" class="action-btn highlight" title="দূরত্ব ও রুট নির্ণয়">
-        <i class="fa-solid fa-diamond-turn-right"></i>
-        <span data-i18n="routeDist">রুট ও দূরত্ব</span>
-      </button>
+
+      <!-- Distance Measuring Ruler Tool -->
       <button id="measureToolBtn" class="action-btn" title="ফিতা টুল (সরলরেখা দূরত্ব মাপুন)">
         <i class="fa-solid fa-ruler-combined"></i>
         <span data-i18n="ruler">পরিমাপক</span>
       </button>
+
+      <!-- My Location GPS Geolocation -->
       <button id="locateMeBtn" class="action-btn icon-only" title="আমার বর্তমান অবস্থান">
         <i class="fa-solid fa-crosshairs"></i>
       </button>
+
+      <!-- Fullscreen Toggle -->
       <button id="fullscreenBtn" class="action-btn icon-only" title="ফুলস্ক্রিন ভিউ">
         <i class="fa-solid fa-expand"></i>
+      </button>
+
+      <!-- Language Switcher: Bangla / English -->
+      <button id="langToggleBtn" class="lang-toggle-btn" title="ভাষা পরিবর্তন / Switch Language">
+        <i class="fa-solid fa-globe"></i>
+        <span id="currentLangLabel">English</span>
       </button>
     </div>
   </header>
@@ -101,17 +112,10 @@
   <div class="divisions-bar">
     <span class="div-label"><i class="fa-solid fa-compass"></i> বিভাগসমূহ:</span>
     <div class="divisions-list" id="divisionsList">
-      <button class="div-chip active" data-div="all">সম্পূর্ণ বাংলাদেশ (Focus)</button>
-      
-      <!-- Direct Single District Selector Button & Dropdown in Quick Bar -->
-      <button class="div-chip district-quick-chip" id="quickDistrictPickBtn" title="একক জেলার ম্যাপ দেখুন (৬৪ জেলা)">
-        <i class="fa-solid fa-map-location-dot"></i>
-        <span>📍 একক জেলা নির্বাচন (৬৪ জেলা)</span>
+      <button class="div-chip active" id="divChipHome" data-div="all" title="মূল বাংলাদেশ ম্যাপে ফিরে যান (হোম)">
+        <i class="fa-solid fa-house"></i>
+        <span data-i18n="allBd">সম্পূর্ণ বাংলাদেশ (হোম)</span>
       </button>
-      <select id="quickDistrictSelect" class="quick-district-select" title="সরাসরি যেকোনো জেলা বেছে নিন">
-        <option value="">-- যেকোনো জেলা বেছে নিন --</option>
-      </select>
-
       <button class="div-chip" data-div="dhaka">ঢাকা</button>
       <button class="div-chip" data-div="chattogram">চট্টগ্রাম</button>
       <button class="div-chip" data-div="sylhet">সিলেট</button>
@@ -596,7 +600,11 @@
 
     <!-- Mobile Bottom Navigation Bar (Thumb-friendly mobile/tab control) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
-      <button class="mobile-nav-btn active-route" id="mobileRouteBtn" title="কোথায় যাবেন? (রুট)">
+      <button class="mobile-nav-btn active" id="mobileHomeBtn" title="মূল বাংলাদেশ ম্যাপ">
+        <i class="fa-solid fa-house"></i>
+        <span data-i18n="homeMap">মূল ম্যাপ</span>
+      </button>
+      <button class="mobile-nav-btn" id="mobileRouteBtn" title="কোথায় যাবেন? (রুট)">
         <i class="fa-solid fa-diamond-turn-right"></i>
         <span data-i18n="mobileWhereToGo">কোথায় যাবেন?</span>
       </button>
@@ -630,10 +638,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
-  <script src="bd_data.js?v=12"></script>
-  <script src="bd_districts_geojson.js?v=12"></script>
+  <script src="bd_data.js?v=13"></script>
+  <script src="bd_districts_geojson.js?v=13"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

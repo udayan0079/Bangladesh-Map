@@ -147,13 +147,15 @@ const I18N = {
     gpsStatusLabel: 'জিপিএস অবস্থান',
     stationaryStatus: 'দাঁড়িয়ে আছেন (০ কিমি/ঘণ্টা)',
     movingStatus: 'চলমান',
-    districtMapBtn: 'একক জেলা ম্যাপ'
+    districtMapBtn: 'একক জেলা ম্যাপ',
+    homeMap: 'মূল বাংলাদেশ'
   },
   en: {
     appTitle: 'Bangladesh Map',
     appSubtitle: '(বাংলাদেশ ম্যাপ)',
     tagline: 'Bangladesh Territory Only • All Thanas, Villages, Rivers & Roads',
     searchPlaceholder: 'Search any thana, village, river or place...',
+    homeMap: 'Home / All BD',
     whereToGo: 'Where to go?',
     mobileWhereToGo: 'Where to go?',
     districtMapBtn: 'District Only Map',
@@ -1284,7 +1286,7 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
 // Setup Route UI Handlers
 function setupRouteUI() {
-  const toggleBtn = document.getElementById('routeModeToggleBtn');
+  const toggleBtn = document.getElementById('routeModeToggleBtn') || document.getElementById('whereToGoBtn');
   const panel = document.getElementById('routePanel');
   const closeBtn = document.getElementById('closeRoutePanelBtn');
   const clearBtn = document.getElementById('clearRouteBtn');
@@ -1293,9 +1295,9 @@ function setupRouteUI() {
   const currentLocBtn = document.getElementById('useCurrentLocationStart');
   const toggleStepsBtn = document.getElementById('toggleStepsBtn');
 
-  toggleBtn.addEventListener('click', () => {
+  toggleBtn?.addEventListener('click', () => {
     panel.classList.toggle('active');
-    document.getElementById('thanaPanel').classList.remove('active');
+    document.getElementById('thanaPanel')?.classList.remove('active');
   });
 
   closeBtn.addEventListener('click', () => {
@@ -2512,12 +2514,16 @@ function getUserLocation(callback) {
 function setupDivisionsBar() {
   document.querySelectorAll('.div-chip').forEach(chip => {
     chip.addEventListener('click', () => {
+      const divKey = chip.getAttribute('data-div');
+      if (divKey === 'all') {
+        resetToMainBangladeshMap();
+        return;
+      }
+
       document.querySelectorAll('.div-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
 
-      const divKey = chip.getAttribute('data-div');
       const divData = DIVISIONS[divKey];
-
       if (divData) {
         state.map.flyTo(divData.center, divData.zoom, { duration: 1.5 });
         showToast(`${divData.name}-এ জুম করা হয়েছে`);
@@ -2624,6 +2630,7 @@ function setupGlobalShortcuts() {
 
 // Mobile Bottom Navigation Handlers
 function setupMobileNav() {
+  const mHomeBtn = document.getElementById('mobileHomeBtn');
   const mRouteBtn = document.getElementById('mobileRouteBtn');
   const mThanaBtn = document.getElementById('mobileThanaBtn');
   const mRiversBtn = document.getElementById('mobileRiversBtn');
@@ -2636,6 +2643,14 @@ function setupMobileNav() {
 
   function clearNavActive() {
     document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  }
+
+  if (mHomeBtn) {
+    mHomeBtn.addEventListener('click', () => {
+      clearNavActive();
+      mHomeBtn.classList.add('active');
+      resetToMainBangladeshMap();
+    });
   }
 
   if (mRouteBtn) {
@@ -3253,7 +3268,156 @@ function exitSingleDistrictMode() {
     state.map.invalidateSize();
   }, 250);
 
-  showToast('সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যাওয়া হয়েছে।');
+  if (!silent) {
+    showToast(state.lang === 'bn' ? 'সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যাওয়া হয়েছে।' : 'Returned to Full Bangladesh Map.');
+  }
+}
+
+// Universal Master Reset: Returns to Full Bangladesh Map from ANY mode or state
+function resetToMainBangladeshMap(silent = false) {
+  // 1. Exit Single District Mode if active
+  if (state.districtFocus && (state.districtFocus.active || state.districtFocus.district)) {
+    exitSingleDistrictMode(true);
+  }
+
+  // 2. Stop Live Navigation if running
+  if (state.navAnimation && state.navAnimation.running) {
+    stopLiveNavigation(true);
+  }
+
+  // 3. Hide Navigation Top Guidance Banner & Bottom Dock
+  const banner = document.getElementById('turnGuidanceBanner');
+  if (banner) banner.style.display = 'none';
+  const dock = document.getElementById('navBottomDock');
+  if (dock) dock.style.display = 'none';
+
+  // 4. Close Route Panel & clear active route
+  const routePanel = document.getElementById('routePanel');
+  if (routePanel) routePanel.classList.remove('active');
+  const mRouteBtn = document.getElementById('mobileRouteBtn');
+  if (mRouteBtn) mRouteBtn.classList.remove('active');
+
+  // Clear route state & polyline
+  state.routePoints.start = null;
+  state.routePoints.end = null;
+  state.lastCalculatedDistanceKm = null;
+  const startInp = document.getElementById('startInput');
+  if (startInp) startInp.value = '';
+  const endInp = document.getElementById('endInput');
+  if (endInp) endInp.value = '';
+  const resCard = document.getElementById('routeResultsCard');
+  if (resCard) resCard.style.display = 'none';
+
+  const startDrop = document.getElementById('startSuggestions');
+  if (startDrop) { startDrop.classList.remove('active'); startDrop.innerHTML = ''; }
+  const endDrop = document.getElementById('endSuggestions');
+  if (endDrop) { endDrop.classList.remove('active'); endDrop.innerHTML = ''; }
+
+  if (state.routePolyline) {
+    try { state.map.removeLayer(state.routePolyline); } catch(e){}
+    state.routePolyline = null;
+  }
+  if (state.routeGlowLayer) {
+    try { state.map.removeLayer(state.routeGlowLayer); } catch(e){}
+    state.routeGlowLayer = null;
+  }
+  if (state.routeArrowMarkers && state.routeArrowMarkers.length > 0) {
+    state.routeArrowMarkers.forEach(m => { try { state.map.removeLayer(m); } catch(e){} });
+    state.routeArrowMarkers = [];
+  }
+  if (state.routeMarkers && state.routeMarkers.length > 0) {
+    state.routeMarkers.forEach(m => { try { state.map.removeLayer(m); } catch(e){} });
+    state.routeMarkers = [];
+  }
+
+  // 5. Close Thana Directory Panel
+  const thanaPanel = document.getElementById('thanaPanel');
+  if (thanaPanel) thanaPanel.classList.remove('active');
+  const mThanaBtn = document.getElementById('mobileThanaBtn');
+  if (mThanaBtn) mThanaBtn.classList.remove('active');
+
+  // 6. Close District Selector Modal
+  const distModal = document.getElementById('districtSelectorModal');
+  if (distModal) distModal.classList.remove('active');
+
+  // 7. Stop Measurement Ruler if active
+  if (state.measureMode) {
+    stopMeasurement();
+  }
+
+  // 8. Turn off river overlay if active
+  if (state.riversVisible) {
+    state.riversVisible = false;
+    if (state.riverLayers) {
+      state.riverLayers.forEach(l => {
+        try { if (state.map.hasLayer(l)) state.map.removeLayer(l); } catch(e){}
+      });
+    }
+    document.getElementById('riversToggleBtn')?.classList.remove('active-tool');
+    document.getElementById('mobileRiversBtn')?.classList.remove('active');
+  }
+
+  // 9. Close Layer Switcher menu
+  const layersMenu = document.getElementById('layersMenu');
+  if (layersMenu) layersMenu.classList.remove('active');
+  document.getElementById('mobileLayersBtn')?.classList.remove('active');
+
+  // 10. Clear Search & POI markers
+  if (state.searchMarker && state.map.hasLayer(state.searchMarker)) {
+    try { state.map.removeLayer(state.searchMarker); } catch(e){}
+    state.searchMarker = null;
+  }
+  if (state.activeThanaMarker && state.map.hasLayer(state.activeThanaMarker)) {
+    try { state.map.removeLayer(state.activeThanaMarker); } catch(e){}
+    state.activeThanaMarker = null;
+  }
+  const sInput = document.getElementById('searchInput');
+  if (sInput) sInput.value = '';
+  const clearSBtn = document.getElementById('clearSearchBtn');
+  if (clearSBtn) clearSBtn.style.display = 'none';
+  const sResults = document.getElementById('searchResults');
+  if (sResults) sResults.classList.remove('active');
+
+  // 11. Ensure countrywide BD border is restored
+  if (state.maskPolygon && !state.map.hasLayer(state.maskPolygon)) {
+    try { state.map.addLayer(state.maskPolygon); } catch(e){}
+  }
+
+  // 12. Ensure countrywide district marker cluster is restored
+  if (state.markerCluster && !state.map.hasLayer(state.markerCluster)) {
+    try { state.map.addLayer(state.markerCluster); } catch(e){}
+  }
+
+  // 13. Reset Division Chips to "সম্পূর্ণ বাংলাদেশ"
+  document.querySelectorAll('.div-chip').forEach(c => {
+    c.classList.toggle('active', c.getAttribute('data-div') === 'all');
+  });
+  state.activeDivision = 'all';
+
+  // 14. Reset Mobile Bottom Nav active state: highlight Home
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mobileHomeBtn')?.classList.add('active');
+
+  // 15. Reset Map Camera to Full Bangladesh
+  if (state.map) {
+    state.map.setMinZoom(7);
+    state.map.setMaxBounds(BD_BOUNDS);
+    state.map.flyTo(BD_CENTER, 7.5, { duration: 1.2 });
+  }
+
+  setTimeout(() => {
+    state.map?.invalidateSize();
+  }, 200);
+
+  if (!silent) {
+    showToast(state.lang === 'bn' ? 'মূল বাংলাদেশ মানচিত্রে ফিরে আসা হয়েছে।' : 'Returned to Main Bangladesh Map.');
+  }
+}
+
+function setupHomeMapButton() {
+  document.getElementById('homeMainMapBtn')?.addEventListener('click', () => resetToMainBangladeshMap());
+  document.getElementById('headerBrand')?.addEventListener('click', () => resetToMainBangladeshMap());
+  document.getElementById('divChipHome')?.addEventListener('click', () => resetToMainBangladeshMap());
 }
 
 function setupSingleDistrictModule() {
@@ -3261,39 +3425,6 @@ function setupSingleDistrictModule() {
   const topBtn = document.getElementById('singleDistrictBtn');
   if (topBtn) {
     topBtn.addEventListener('click', openDistrictSelectorModal);
-  }
-
-  // Quick District Pick Button in Divisions Bar
-  const quickPickBtn = document.getElementById('quickDistrictPickBtn');
-  if (quickPickBtn) {
-    quickPickBtn.addEventListener('click', openDistrictSelectorModal);
-  }
-
-  // Quick District Select Dropdown in Divisions Bar
-  const quickSelect = document.getElementById('quickDistrictSelect');
-  if (quickSelect && typeof BD_DISTRICTS !== 'undefined') {
-    quickSelect.innerHTML = '<option value="">📍 সরাসরি জেলা বেছে নিন (৬৪ জেলা)...</option>';
-    const divKeys = ['dhaka', 'chattogram', 'sylhet', 'rajshahi', 'khulna', 'barishal', 'rangpur', 'mymensingh'];
-    divKeys.forEach(dk => {
-      const group = document.createElement('optgroup');
-      group.label = getDivisionName(dk);
-      const dists = BD_DISTRICTS.filter(d => d.div === dk);
-      dists.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.name;
-        opt.textContent = `${d.name} (${d.en}) - ${d.thanas.length} থানা`;
-        group.appendChild(opt);
-      });
-      quickSelect.appendChild(group);
-    });
-
-    quickSelect.addEventListener('change', () => {
-      const val = quickSelect.value;
-      if (val) {
-        const d = BD_DISTRICTS.find(item => item.name === val);
-        if (d) activateSingleDistrictMode(d);
-      }
-    });
   }
 
   // Mobile Drawer Expand/Collapse Toggle
@@ -3363,10 +3494,10 @@ function setupSingleDistrictModule() {
     });
   });
 
-  // Exit District Mode buttons
-  document.getElementById('exitDistrictModeBtn')?.addEventListener('click', exitSingleDistrictMode);
-  document.getElementById('backToAllBdBtn')?.addEventListener('click', exitSingleDistrictMode);
-  document.getElementById('pillExitDistrictBtn')?.addEventListener('click', exitSingleDistrictMode);
+  // Exit District Mode buttons (Connect to Universal Master Reset)
+  document.getElementById('exitDistrictModeBtn')?.addEventListener('click', () => resetToMainBangladeshMap());
+  document.getElementById('backToAllBdBtn')?.addEventListener('click', () => resetToMainBangladeshMap());
+  document.getElementById('pillExitDistrictBtn')?.addEventListener('click', () => resetToMainBangladeshMap());
 
   // Top Control Bar Thanas button toggle
   document.getElementById('dtBarThanasToggleBtn')?.addEventListener('click', () => {
@@ -3425,6 +3556,19 @@ function setupSingleDistrictModule() {
   populateDistrictSwitchDropdown();
 }
 
+// Window Resize & Orientation Change Handlers (Fixes any tile rendering or edge glitches)
+window.addEventListener('resize', () => {
+  if (state.map) {
+    state.map.invalidateSize();
+  }
+});
+
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    if (state.map) state.map.invalidateSize();
+  }, 250);
+});
+
 // Application Initialization
 window.addEventListener('DOMContentLoaded', () => {
   setupLanguageSwitcher();
@@ -3441,4 +3585,5 @@ window.addEventListener('DOMContentLoaded', () => {
   setupGlobalShortcuts();
   setupMobileNav();
   setupSingleDistrictModule();
+  setupHomeMapButton();
 });
