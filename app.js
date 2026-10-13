@@ -32,7 +32,19 @@ const state = {
   totalMeasuredDist: 0,
   userLocationMarker: null,
   searchMarker: null,
-  activeThanaMarker: null
+  activeThanaMarker: null,
+  navAnimation: {
+    active: false,
+    paused: false,
+    speedMultiplier: 1,
+    coordinates: [],
+    steps: [],
+    currentIndex: 0,
+    marker: null,
+    intervalId: null,
+    totalDistanceKm: 0,
+    totalMinutes: 0
+  }
 };
 
 // Strict Bangladesh Geographic Bounds
@@ -826,18 +838,37 @@ async function calculateRoute() {
     if (state.routePolyline) state.map.removeLayer(state.routePolyline);
 
     const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+    
+    // Save route coordinates & steps for live animation simulation
+    state.navAnimation.coordinates = coordinates;
+    state.navAnimation.steps = route.legs[0].steps || [];
+    state.navAnimation.totalDistanceKm = parseFloat(distanceKm);
+
+    if (state.routePolyline) state.map.removeLayer(state.routePolyline);
+
+    // Dynamic style based on travel mode
+    let routeColor = '#059669';
+    let dashPattern = null;
+    if (state.travelMode === 'bike') {
+      routeColor = '#f59e0b';
+    } else if (state.travelMode === 'train') {
+      routeColor = '#0284c7';
+      dashPattern = '12, 6'; // Rail tracks dash style
+    }
+
     state.routePolyline = L.polyline(coordinates, {
-      color: '#059669',
+      color: routeColor,
       weight: 6,
       opacity: 0.9,
       lineCap: 'round',
-      lineJoin: 'round'
+      lineJoin: 'round',
+      dashArray: dashPattern
     }).addTo(state.map);
 
     state.map.fitBounds(state.routePolyline.getBounds(), { padding: [60, 60] });
     renderStepsList(route.legs[0].steps);
 
-    showToast(`রুট ও বাস্তব সময় তৈরি হয়েছে! সড়ক দূরত্ব: ${toBanglaNum(distanceKm)} কিমি`);
+    showToast(`সর্বনিম্ন দূরত্বের সেরা রুট তৈরি হয়েছে! দূরত্ব: ${toBanglaNum(distanceKm)} কিমি`);
 
   } catch (err) {
     console.error('Route error:', err);
@@ -848,16 +879,19 @@ async function calculateRoute() {
   }
 }
 
-// Calculate Real-World Bangladesh Travel Time based on Distance & Mode
+// Calculate Real-World Bangladesh Travel Time based on Distance & Mode (Car, Bike, Train)
 function calculateRealisticTravelTime(distanceKm, mode) {
   const d = parseFloat(distanceKm);
   if (isNaN(d) || d <= 0) return { minutes: 0, text: '০ মিনিট' };
 
   let totalMinutes = 0;
 
-  if (mode === 'walking') {
-    // Average human walking speed: ~4.8 km/h
-    totalMinutes = Math.round((d / 4.8) * 60);
+  if (mode === 'train') {
+    // Bangladesh Railway Express Train speed model:
+    // Average cruising speed 65 km/h + station stops
+    const railMinutes = (d / 65) * 60;
+    const stops = Math.min(60, 15 + Math.floor(d / 45) * 6);
+    totalMinutes = Math.round(railMinutes + stops);
   } else if (mode === 'bike') {
     // Motorcycle: can bypass city bottlenecks, cruises at 58 km/h on regional/highway
     if (d <= 10) {
@@ -903,13 +937,13 @@ function formatMinutesToBangla(totalMinutes) {
   }
 }
 
-// Update all 3 Mode Times simultaneously in the UI
+// Update all 3 Mode Times simultaneously in the UI (Car, Bike, Train)
 function updateAllModeTimes(distanceKm) {
   state.lastCalculatedDistanceKm = distanceKm;
 
   const carData = calculateRealisticTravelTime(distanceKm, 'driving');
   const bikeData = calculateRealisticTravelTime(distanceKm, 'bike');
-  const walkData = calculateRealisticTravelTime(distanceKm, 'walking');
+  const trainData = calculateRealisticTravelTime(distanceKm, 'train');
 
   const elCar = document.getElementById('timeCar');
   if (elCar) elCar.innerText = carData.text;
@@ -917,22 +951,31 @@ function updateAllModeTimes(distanceKm) {
   const elBike = document.getElementById('timeBike');
   if (elBike) elBike.innerText = bikeData.text;
 
-  const elWalk = document.getElementById('timeWalk');
-  if (elWalk) elWalk.innerText = walkData.text;
+  const elTrain = document.getElementById('timeTrain');
+  if (elTrain) elTrain.innerText = trainData.text;
+
+  // Save for animation HUD
+  if (state.travelMode === 'train') {
+    state.navAnimation.totalMinutes = trainData.minutes;
+  } else if (state.travelMode === 'bike') {
+    state.navAnimation.totalMinutes = bikeData.minutes;
+  } else {
+    state.navAnimation.totalMinutes = carData.minutes;
+  }
 
   // Update Main Display
   const resTime = document.getElementById('resTime');
   const resTimeLabel = document.getElementById('resTimeLabel');
 
-  if (state.travelMode === 'walking') {
-    if (resTime) resTime.innerText = walkData.text;
-    if (resTimeLabel) resTimeLabel.innerText = 'হাঁটার সময় (Walking Time)';
+  if (state.travelMode === 'train') {
+    if (resTime) resTime.innerText = trainData.text;
+    if (resTimeLabel) resTimeLabel.innerText = 'ট্রেনে সময় (Train Time)';
   } else if (state.travelMode === 'bike') {
     if (resTime) resTime.innerText = bikeData.text;
-    if (resTimeLabel) resTimeLabel.innerText = 'বাইক সময় (Bike Time)';
+    if (resTimeLabel) resTimeLabel.innerText = 'বাইকে সময় (Bike Time)';
   } else {
     if (resTime) resTime.innerText = carData.text;
-    if (resTimeLabel) resTimeLabel.innerText = 'ড্রাইভিং সময় (Driving Time)';
+    if (resTimeLabel) resTimeLabel.innerText = 'গাড়িতে সময় (Car Time)';
   }
 
   // Sync Active Mode Chips & Buttons
@@ -1025,6 +1068,7 @@ function setupRouteUI() {
   });
 
   clearBtn.addEventListener('click', () => {
+    stopLiveNavigation(true);
     state.routePoints.start = null;
     state.routePoints.end = null;
     state.lastCalculatedDistanceKm = null;
@@ -1084,6 +1128,15 @@ function setupRouteUI() {
       c.classList.toggle('active', c.getAttribute('data-mode') === mode);
     });
 
+    // If live navigation is active, update vehicle style and HUD immediately
+    if (state.navAnimation.active) {
+      updateNavModeHUD();
+      if (state.navAnimation.coordinates.length > 0) {
+        const currCoord = state.navAnimation.coordinates[state.navAnimation.currentIndex || 0];
+        updateLiveVehicleMarker(currCoord[0], currCoord[1], state.travelMode);
+      }
+    }
+
     if (state.lastCalculatedDistanceKm) {
       updateAllModeTimes(state.lastCalculatedDistanceKm);
     } else if (state.routePoints.start && state.routePoints.end) {
@@ -1131,9 +1184,414 @@ function setupRouteUI() {
     });
   });
 
+  // Live Navigation Simulation Control Event Listeners
+  const startLiveNavBtn = document.getElementById('startLiveNavBtn');
+  if (startLiveNavBtn) {
+    startLiveNavBtn.addEventListener('click', startLiveNavigation);
+  }
+
+  const closeLiveNavBtn = document.getElementById('closeLiveNavBtn');
+  if (closeLiveNavBtn) {
+    closeLiveNavBtn.addEventListener('click', () => stopLiveNavigation(true));
+  }
+
+  const pauseNavBtn = document.getElementById('pauseNavBtn');
+  if (pauseNavBtn) {
+    pauseNavBtn.addEventListener('click', togglePauseLiveNavigation);
+  }
+
+  const speedNavBtn = document.getElementById('speedNavBtn');
+  if (speedNavBtn) {
+    speedNavBtn.addEventListener('click', cycleNavSpeedMultiplier);
+  }
+
   // Enable Live Autocomplete Dropdown for Point A and Point B
   setupWaypointAutocomplete('startInput', 'startSuggestions', 'start');
   setupWaypointAutocomplete('endInput', 'endSuggestions', 'end');
+}
+
+// ==========================================
+// LIVE MOVING NAVIGATION SIMULATION ENGINE
+// ==========================================
+
+// Calculate Heading / Bearing angle (0-360 deg) between two geographic points
+function getHeadingAngle(lat1, lon1, lat2, lon2) {
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+  const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+            Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+
+// Create Custom Vehicle Marker on Map with Radar Halo
+function createLiveVehicleMarker(lat, lng, mode, heading = 0) {
+  let modeClass = 'vehicle-car';
+  let iconHtml = '<i class="fa-solid fa-car"></i>';
+  if (mode === 'bike') {
+    modeClass = 'vehicle-bike';
+    iconHtml = '<i class="fa-solid fa-motorcycle"></i>';
+  } else if (mode === 'train') {
+    modeClass = 'vehicle-train';
+    iconHtml = '<i class="fa-solid fa-train-subway"></i>';
+  }
+
+  const divIcon = L.divIcon({
+    className: `live-vehicle-marker ${modeClass}`,
+    html: `
+      <div class="live-vehicle-halo"></div>
+      <div class="live-vehicle-core" style="transform: rotate(${heading}deg);">
+        ${iconHtml}
+      </div>
+    `,
+    iconSize: [42, 42],
+    iconAnchor: [21, 21]
+  });
+
+  return L.marker([lat, lng], { icon: divIcon, zIndexOffset: 2500 });
+}
+
+// Update Existing Vehicle Marker's Position, Heading & Mode
+function updateLiveVehicleMarker(lat, lng, mode, heading = 0) {
+  if (!state.navAnimation.marker) {
+    state.navAnimation.marker = createLiveVehicleMarker(lat, lng, mode, heading).addTo(state.map);
+    return;
+  }
+
+  state.navAnimation.marker.setLatLng([lat, lng]);
+
+  let modeClass = 'vehicle-car';
+  let iconHtml = '<i class="fa-solid fa-car"></i>';
+  if (mode === 'bike') {
+    modeClass = 'vehicle-bike';
+    iconHtml = '<i class="fa-solid fa-motorcycle"></i>';
+  } else if (mode === 'train') {
+    modeClass = 'vehicle-train';
+    iconHtml = '<i class="fa-solid fa-train-subway"></i>';
+  }
+
+  const icon = L.divIcon({
+    className: `live-vehicle-marker ${modeClass}`,
+    html: `
+      <div class="live-vehicle-halo"></div>
+      <div class="live-vehicle-core" style="transform: rotate(${heading}deg);">
+        ${iconHtml}
+      </div>
+    `,
+    iconSize: [42, 42],
+    iconAnchor: [21, 21]
+  });
+  state.navAnimation.marker.setIcon(icon);
+}
+
+// Start Live Navigation Simulation
+function startLiveNavigation() {
+  const coords = state.navAnimation.coordinates;
+  if (!coords || coords.length < 2) {
+    showToast('প্রথমে শুরু ও গন্তব্য স্থান সিলেক্ট করে রুট বের করুন!');
+    return;
+  }
+
+  // Close Route panel on mobile/screen to leave map unobstructed
+  const routePanel = document.getElementById('routePanel');
+  if (routePanel) {
+    routePanel.classList.remove('active');
+    document.getElementById('mobileRouteBtn')?.classList.remove('active');
+  }
+
+  // Show Live Navigation HUD
+  const hud = document.getElementById('liveNavHud');
+  if (hud) hud.style.display = 'flex';
+
+  // Initialize/Reset Navigation state
+  state.navAnimation.active = true;
+  state.navAnimation.paused = false;
+  state.navAnimation.currentIndex = 0;
+  state.navAnimation.speedMultiplier = 1;
+
+  // Update speed boost button label
+  const speedBtn = document.getElementById('speedNavBtn');
+  if (speedBtn) speedBtn.innerText = '1x';
+
+  // Update pause button icon
+  const pauseBtn = document.getElementById('pauseNavBtn');
+  if (pauseBtn) pauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+
+  // Configure mode HUD styling
+  updateNavModeHUD();
+
+  // Create Vehicle Marker at starting coordinate
+  const startPt = coords[0];
+  const nextPt = coords[1];
+  const initialHeading = getHeadingAngle(startPt[0], startPt[1], nextPt[0], nextPt[1]);
+
+  if (state.navAnimation.marker) {
+    state.map.removeLayer(state.navAnimation.marker);
+    state.navAnimation.marker = null;
+  }
+  updateLiveVehicleMarker(startPt[0], startPt[1], state.travelMode, initialHeading);
+
+  // Zoom into initial point and start animation
+  state.map.setView([startPt[0], startPt[1]], Math.max(state.map.getZoom(), 14), { animate: true });
+
+  if (state.navAnimation.intervalId) {
+    clearInterval(state.navAnimation.intervalId);
+  }
+
+  // Animation Tick Interval (~150ms per tick)
+  state.navAnimation.intervalId = setInterval(navAnimationStep, 150);
+
+  const modeName = state.travelMode === 'train' ? 'রেলপথ' : (state.travelMode === 'bike' ? 'বাইক' : 'গাড়ি');
+  showToast(`লাইভ ${modeName} নেভিগেশন শুরু হয়েছে! ম্যাপে লাইভ গতিবিধি লক্ষ্য করুন।`);
+}
+
+// Step function for each tick of simulation
+function navAnimationStep() {
+  if (!state.navAnimation.active || state.navAnimation.paused) return;
+
+  const coords = state.navAnimation.coordinates;
+  const totalPoints = coords.length;
+
+  if (state.navAnimation.currentIndex >= totalPoints - 1) {
+    // Reached destination!
+    stopLiveNavigation(false);
+    showDestinationReached();
+    return;
+  }
+
+  // Calculate jump steps based on speedMultiplier and route density
+  let stepIncrement = 1;
+  const mult = state.navAnimation.speedMultiplier || 1;
+  if (mult === 2) stepIncrement = 2;
+  else if (mult === 5) stepIncrement = totalPoints > 300 ? 5 : 4;
+  else if (mult === 10) stepIncrement = totalPoints > 500 ? 10 : 7;
+
+  state.navAnimation.currentIndex = Math.min(totalPoints - 1, state.navAnimation.currentIndex + stepIncrement);
+  const currIdx = state.navAnimation.currentIndex;
+  const currentCoord = coords[currIdx];
+
+  // Calculate Heading
+  let heading = 0;
+  if (currIdx < totalPoints - 1) {
+    const nextCoord = coords[currIdx + 1];
+    heading = getHeadingAngle(currentCoord[0], currentCoord[1], nextCoord[0], nextCoord[1]);
+  } else if (currIdx > 0) {
+    const prevCoord = coords[currIdx - 1];
+    heading = getHeadingAngle(prevCoord[0], prevCoord[1], currentCoord[0], currentCoord[1]);
+  }
+
+  // Update vehicle marker on map
+  updateLiveVehicleMarker(currentCoord[0], currentCoord[1], state.travelMode, heading);
+
+  // Smoothly center the map on the vehicle every 3 frames
+  if (currIdx % (3 * stepIncrement) === 0 || currIdx === totalPoints - 1) {
+    state.map.panTo([currentCoord[0], currentCoord[1]], { animate: true, duration: 0.3 });
+  }
+
+  // Calculate remaining distance and time
+  const remainingFraction = (totalPoints - 1 - currIdx) / Math.max(1, totalPoints - 1);
+  const remainingKm = Math.max(0, (state.navAnimation.totalDistanceKm * remainingFraction)).toFixed(1);
+  const remainingMins = Math.max(0, Math.round(state.navAnimation.totalMinutes * remainingFraction));
+
+  const distEl = document.getElementById('navRemainingDist');
+  if (distEl) distEl.innerText = `${toBanglaNum(remainingKm)} কিমি`;
+
+  const timeEl = document.getElementById('navRemainingTime');
+  if (timeEl) timeEl.innerText = formatMinutesToBangla(remainingMins);
+
+  // Dynamic realistic speed gauge with natural fluctuation
+  updateNavSpeedDisplay(currIdx);
+
+  // Turn-by-Turn Instruction matching
+  updateUpcomingTurnInstruction(currIdx, remainingKm);
+}
+
+// Update Live Speed in HUD
+function updateNavSpeedDisplay(idx) {
+  const speedEl = document.getElementById('navLiveSpeed');
+  if (!speedEl) return;
+
+  let baseSpeed = 46;
+  if (state.travelMode === 'bike') baseSpeed = 54;
+  else if (state.travelMode === 'train') baseSpeed = 68;
+
+  // Add realistic speed jitter (+/- 6 km/h)
+  const jitter = Math.round(Math.sin(idx * 0.4) * 5 + Math.cos(idx * 0.2) * 2);
+  const liveSpeed = Math.max(20, baseSpeed + jitter);
+
+  speedEl.innerText = `${toBanglaNum(liveSpeed)} কিমি/ঘণ্টা`;
+}
+
+// Update Upcoming Turn Instruction in HUD
+function updateUpcomingTurnInstruction(currIdx, remainingKm) {
+  const instructEl = document.getElementById('navInstruction');
+  const distEl = document.getElementById('navNextTurnDist');
+  const iconWrap = document.getElementById('navTurnIconWrap');
+  const iconEl = document.getElementById('navTurnIcon');
+
+  if (!instructEl || !distEl || !iconWrap || !iconEl) return;
+
+  const steps = state.navAnimation.steps;
+
+  if (parseFloat(remainingKm) <= 0.1 || currIdx >= state.navAnimation.coordinates.length - 2) {
+    instructEl.innerText = 'গন্তব্যে পৌঁছাচ্ছেন!';
+    distEl.innerText = '১০০ মিটারের মধ্যে গন্তব্য';
+    iconEl.className = 'fa-solid fa-flag-checkered';
+    iconWrap.style.background = '#10b981';
+    return;
+  }
+
+  if (steps && steps.length > 0) {
+    // Find closest step based on fraction
+    const totalPoints = state.navAnimation.coordinates.length;
+    const stepIdx = Math.min(steps.length - 1, Math.floor((currIdx / totalPoints) * steps.length));
+    const step = steps[stepIdx];
+
+    if (step && step.maneuver) {
+      const type = step.maneuver.type || '';
+      const modifier = step.maneuver.modifier || '';
+      let text = step.maneuver.instruction || step.name || 'সড়ক অনুসরণ করুন';
+      let icon = 'fa-solid fa-arrow-up';
+      let bgColor = '#10b981';
+
+      if (modifier.includes('right')) {
+        text = 'ডানে মোড় নিন (Turn Right)';
+        icon = 'fa-solid fa-turn-right';
+        bgColor = '#3b82f6';
+      } else if (modifier.includes('left')) {
+        text = 'বামে মোড় নিন (Turn Left)';
+        icon = 'fa-solid fa-turn-left';
+        bgColor = '#f59e0b';
+      } else if (modifier.includes('slight right')) {
+        text = 'সামনে সামান্য ডানে রাখুন';
+        icon = 'fa-solid fa-arrow-right';
+        bgColor = '#3b82f6';
+      } else if (modifier.includes('slight left')) {
+        text = 'সামনে সামান্য বামে রাখুন';
+        icon = 'fa-solid fa-arrow-left';
+        bgColor = '#f59e0b';
+      } else if (modifier.includes('uturn')) {
+        text = 'ইউ-টার্ন নিন (U-Turn)';
+        icon = 'fa-solid fa-arrow-rotate-left';
+        bgColor = '#ef4444';
+      } else if (type === 'roundabout') {
+        text = 'গোলচত্বর অতিক্রম করুন';
+        icon = 'fa-solid fa-arrows-spin';
+        bgColor = '#8b5cf6';
+      } else {
+        text = 'সোজা প্রধান সড়ক অনুসরণ করুন';
+        icon = 'fa-solid fa-arrow-up';
+        bgColor = '#10b981';
+      }
+
+      instructEl.innerText = text;
+      distEl.innerText = `পরবর্তী মোড়: ~${toBanglaNum((Math.max(0.1, (step.distance || 500) / 1000)).toFixed(1))} কিমি`;
+      iconEl.className = icon;
+      iconWrap.style.background = bgColor;
+      return;
+    }
+  }
+
+  // Fallback default message
+  instructEl.innerText = state.travelMode === 'train' ? 'রেলপথ বরাবর ট্রেন যাত্রা চলছে' : 'সোজা প্রধান সড়ক অনুসরণ করুন';
+  distEl.innerText = `বাকি পথ: ${toBanglaNum(remainingKm)} কিমি`;
+  iconEl.className = state.travelMode === 'train' ? 'fa-solid fa-train-subway' : 'fa-solid fa-diamond-turn-right';
+}
+
+// Update HUD Header and Vehicle Pills
+function updateNavModeHUD() {
+  const icon = document.getElementById('navVehicleIcon');
+  const txt = document.getElementById('navVehicleText');
+  const instructCard = document.querySelector('.live-nav-instruct-card');
+
+  if (state.travelMode === 'train') {
+    if (icon) {
+      icon.className = 'fa-solid fa-train-subway text-cyan';
+      icon.style.color = '#0284c7';
+    }
+    if (txt) txt.innerText = 'লাইভ রেল যাত্রা';
+    if (instructCard) instructCard.style.borderLeftColor = '#0284c7';
+  } else if (state.travelMode === 'bike') {
+    if (icon) {
+      icon.className = 'fa-solid fa-motorcycle text-amber';
+      icon.style.color = '#f59e0b';
+    }
+    if (txt) txt.innerText = 'লাইভ বাইকিং';
+    if (instructCard) instructCard.style.borderLeftColor = '#f59e0b';
+  } else {
+    if (icon) {
+      icon.className = 'fa-solid fa-car text-emerald';
+      icon.style.color = '#10b981';
+    }
+    if (txt) txt.innerText = 'লাইভ কার ড্রাইভিং';
+    if (instructCard) instructCard.style.borderLeftColor = '#10b981';
+  }
+}
+
+// Destination Reached Action
+function showDestinationReached() {
+  const instructEl = document.getElementById('navInstruction');
+  const distEl = document.getElementById('navNextTurnDist');
+  const distVal = document.getElementById('navRemainingDist');
+  const timeVal = document.getElementById('navRemainingTime');
+
+  if (instructEl) instructEl.innerText = '🎉 অভিনন্দন! আপনি গন্তব্যে পৌঁছে গেছেন।';
+  if (distEl) distEl.innerText = 'যাত্রা সফলভাবে সমাপ্ত হয়েছে';
+  if (distVal) distVal.innerText = '০ কিমি';
+  if (timeVal) timeVal.innerText = '০ মিনিট';
+
+  showToast('🎉 অভিনন্দন! লাইভ নেভিগেশন সিমুলেশন গন্তব্যে সফলভাবে পৌঁছেছে।');
+}
+
+// Stop or Close Live Navigation
+function stopLiveNavigation(hideHud = true) {
+  state.navAnimation.active = false;
+  state.navAnimation.paused = false;
+
+  if (state.navAnimation.intervalId) {
+    clearInterval(state.navAnimation.intervalId);
+    state.navAnimation.intervalId = null;
+  }
+
+  if (hideHud) {
+    const hud = document.getElementById('liveNavHud');
+    if (hud) hud.style.display = 'none';
+
+    if (state.navAnimation.marker) {
+      state.map.removeLayer(state.navAnimation.marker);
+      state.navAnimation.marker = null;
+    }
+    showToast('লাইভ নেভিগেশন সিমুলেশন বন্ধ করা হয়েছে।');
+  }
+}
+
+// Toggle Pause / Resume
+function togglePauseLiveNavigation() {
+  if (!state.navAnimation.active) return;
+
+  state.navAnimation.paused = !state.navAnimation.paused;
+  const pauseBtn = document.getElementById('pauseNavBtn');
+
+  if (state.navAnimation.paused) {
+    if (pauseBtn) pauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    showToast('নেভিগেশন সাময়িক বিরতি (Paused)');
+  } else {
+    if (pauseBtn) pauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+    showToast('নেভিগেশন পুনরায় চালু হয়েছে (Resumed)');
+  }
+}
+
+// Cycle Simulation Speed Multiplier (1x -> 2x -> 5x -> 10x -> 1x)
+function cycleNavSpeedMultiplier() {
+  const speeds = [1, 2, 5, 10];
+  const curr = state.navAnimation.speedMultiplier || 1;
+  const nextIdx = (speeds.indexOf(curr) + 1) % speeds.length;
+  const nextSpeed = speeds[nextIdx];
+
+  state.navAnimation.speedMultiplier = nextSpeed;
+  const speedBtn = document.getElementById('speedNavBtn');
+  if (speedBtn) speedBtn.innerText = `${nextSpeed}x`;
+
+  showToast(`সিমুলেশন স্পিড: ${nextSpeed}x`);
 }
 
 // Live Autocomplete Implementation for Route Waypoints

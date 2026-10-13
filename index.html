@@ -181,19 +181,19 @@
       </div>
 
       <div class="panel-body">
-        <!-- Travel Mode Selector -->
+        <!-- Travel Mode Selector: Car, Bike, Train -->
         <div class="travel-modes">
-          <button class="mode-btn active" data-mode="driving" title="গাড়ি / ড্রাইভিং">
+          <button class="mode-btn active" data-mode="driving" title="গাড়ি / কার">
             <i class="fa-solid fa-car"></i>
-            <span>ড্রাইভিং</span>
+            <span>গাড়ি (Car)</span>
           </button>
           <button class="mode-btn" data-mode="bike" title="মোটরসাইকেল">
             <i class="fa-solid fa-motorcycle"></i>
-            <span>বাইক</span>
+            <span>বাইক (Bike)</span>
           </button>
-          <button class="mode-btn" data-mode="walking" title="হাঁটা">
-            <i class="fa-solid fa-person-walking"></i>
-            <span>হাঁটা</span>
+          <button class="mode-btn" data-mode="train" title="রেলপথ / ট্রেন">
+            <i class="fa-solid fa-train-subway"></i>
+            <span>ট্রেন (Train)</span>
           </button>
         </div>
 
@@ -241,39 +241,48 @@
         <div class="route-results-card" id="routeResultsCard" style="display: none;">
           <div class="results-summary">
             <div class="metric-box">
-              <span class="metric-label">মোট সড়ক দূরত্ব (Distance)</span>
+              <span class="metric-label">সর্বনিম্ন সড়ক দূরত্ব (Shortest)</span>
               <span class="metric-value" id="resDistance">০ কিমি</span>
             </div>
             <div class="metric-divider"></div>
             <div class="metric-box">
-              <span class="metric-label" id="resTimeLabel">ড্রাইভিং সময় (Est. Time)</span>
+              <span class="metric-label" id="resTimeLabel">আনুমানিক সময় (Est. Time)</span>
               <span class="metric-value highlight" id="resTime">০ মিনিট</span>
             </div>
           </div>
 
-          <!-- Real-Time Mode Comparison Cards -->
+          <!-- Real-Time Mode Comparison Cards (Car, Bike, Train) -->
           <div class="modes-time-comparison" id="modesTimeComparison">
-            <div class="mode-time-chip active" id="chipDriving" data-mode="driving" title="গাড়ি/বাসে আনুমানিক সময়">
+            <div class="mode-time-chip active" id="chipDriving" data-mode="driving" title="গাড়িতে সময়">
               <i class="fa-solid fa-car"></i>
               <div class="time-chip-text">
-                <span class="chip-label">ড্রাইভিং</span>
+                <span class="chip-label">গাড়ি (Car)</span>
                 <span class="chip-val" id="timeCar">০ মিনিট</span>
               </div>
             </div>
-            <div class="mode-time-chip" id="chipBike" data-mode="bike" title="মোটরসাইকেলে আনুমানিক সময়">
+            <div class="mode-time-chip" id="chipBike" data-mode="bike" title="বাইকে সময়">
               <i class="fa-solid fa-motorcycle"></i>
               <div class="time-chip-text">
-                <span class="chip-label">বাইক</span>
+                <span class="chip-label">বাইক (Bike)</span>
                 <span class="chip-val" id="timeBike">০ মিনিট</span>
               </div>
             </div>
-            <div class="mode-time-chip" id="chipWalking" data-mode="walking" title="পায়ে হেঁটে আনুমানিক সময়">
-              <i class="fa-solid fa-person-walking"></i>
+            <div class="mode-time-chip" id="chipTrain" data-mode="train" title="ট্রেনে সময়">
+              <i class="fa-solid fa-train-subway"></i>
               <div class="time-chip-text">
-                <span class="chip-label">হাঁটা</span>
-                <span class="chip-val" id="timeWalk">০ মিনিট</span>
+                <span class="chip-label">ট্রেন (Train)</span>
+                <span class="chip-val" id="timeTrain">০ মিনিট</span>
               </div>
             </div>
+          </div>
+
+          <!-- Live Animated Navigation Launch Trigger -->
+          <div class="live-nav-launch-box">
+            <button id="startLiveNavBtn" class="btn live-nav-trigger-btn">
+              <span class="nav-btn-pulse"></span>
+              <i class="fa-solid fa-circle-play"></i>
+              <span>▶ লাইভ নেভিগেশন সিমুলেশন (চলুন)</span>
+            </button>
           </div>
 
           <div class="route-summary-info">
@@ -345,6 +354,54 @@
       </div>
     </div>
 
+    <!-- Floating Live Turn-by-Turn Moving Navigation Simulation HUD -->
+    <div class="live-nav-hud" id="liveNavHud" style="display: none;">
+      <div class="live-nav-header">
+        <div class="nav-vehicle-pill">
+          <span class="pulse-radar"></span>
+          <i id="navVehicleIcon" class="fa-solid fa-car text-emerald"></i>
+          <span id="navVehicleText">লাইভ ড্রাইভিং</span>
+        </div>
+        <div class="nav-speed-pill">
+          <i class="fa-solid fa-gauge-high"></i>
+          <span id="navLiveSpeed">৪৮ কিমি/ঘণ্টা</span>
+        </div>
+        <button class="nav-close-btn" id="closeLiveNavBtn" title="নেভিগেশন বন্ধ করুন">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="live-nav-instruct-card">
+        <div class="turn-icon-wrap" id="navTurnIconWrap">
+          <i id="navTurnIcon" class="fa-solid fa-diamond-turn-right"></i>
+        </div>
+        <div class="turn-text-wrap">
+          <div id="navInstruction" class="nav-title-txt">সোজা প্রধান সড়ক অনুসরণ করুন</div>
+          <div id="navNextTurnDist" class="nav-dist-txt">পরবর্তী মোড়: ২৫০ মিটার</div>
+        </div>
+      </div>
+
+      <div class="live-nav-metrics-row">
+        <div class="nav-metric-unit">
+          <span class="m-lbl">বাকি দূরত্ব</span>
+          <span class="m-val" id="navRemainingDist">০ কিমি</span>
+        </div>
+        <div class="m-sep"></div>
+        <div class="nav-metric-unit">
+          <span class="m-lbl">বাকি সময়</span>
+          <span class="m-val highlight" id="navRemainingTime">০ মিনিট</span>
+        </div>
+        <div class="m-sep"></div>
+        <div class="nav-metric-unit">
+          <span class="m-lbl">স্পিড বুস্ট</span>
+          <div class="nav-ctrls">
+            <button id="pauseNavBtn" class="nav-btn-icon" title="বিরতি / চালু"><i class="fa-solid fa-pause"></i></button>
+            <button id="speedNavBtn" class="nav-btn-speed" title="সিমুলেশন স্পিড পরিবর্তন">1x</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Mobile Bottom Navigation Bar (Thumb-friendly mobile/tab control) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
       <button class="mobile-nav-btn active-route" id="mobileRouteBtn" title="রুট ও দূরত্ব">
@@ -377,9 +434,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
-  <script src="bd_data.js?v=4"></script>
+  <script src="bd_data.js?v=5"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
