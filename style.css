@@ -2670,49 +2670,127 @@ body {
   box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
 }
 
-/* District Mode Floating Pill */
-.district-mode-floating-pill {
+/* Dedicated Single District Top Control Bar */
+.district-top-control-bar {
   position: absolute;
-  top: 16px;
-  left: 20px;
-  z-index: 780;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 860;
   background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(14px);
-  border: 1.5px solid rgba(16, 185, 129, 0.6);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  padding: 6px 14px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(16, 185, 129, 0.65);
   border-radius: var(--border-radius-full);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 6px 14px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: #ffffff;
-  font-size: 0.82rem;
-  font-weight: 600;
+  max-width: 95%;
+  white-space: nowrap;
 }
 
-.pill-pulse-dot {
-  width: 9px;
-  height: 9px;
+.dt-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dt-pulse-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #10b981;
-  box-shadow: 0 0 8px #10b981;
+  box-shadow: 0 0 10px #10b981;
   animation: pulse-ring 1.8s infinite;
 }
 
-.district-mode-floating-pill button {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
+.dt-dist-name {
+  font-size: 0.95rem;
+  font-weight: 700;
   color: #ffffff;
-  padding: 3px 8px;
-  border-radius: var(--border-radius-full);
+}
+
+.dt-badge {
   font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+  padding: 2px 7px;
+  border-radius: 12px;
+}
+
+.dt-switch-select {
+  padding: 5px 10px;
+  border-radius: var(--border-radius-full);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.dt-switch-select:focus, .dt-switch-select:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: #10b981;
+}
+
+.dt-switch-select option {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.dt-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dt-btn-thana {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: var(--border-radius-full);
+  background: rgba(14, 165, 233, 0.25);
+  border: 1px solid rgba(14, 165, 233, 0.5);
+  color: #7dd3fc;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   transition: var(--transition-fast);
 }
 
-.district-mode-floating-pill button:hover {
+.dt-btn-thana:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.dt-btn-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--border-radius-full);
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.dt-btn-exit:hover {
   background: #ef4444;
+  color: #ffffff;
 }
 
 /* 64-District Selector Modal Dialog */
@@ -3030,14 +3108,33 @@ body {
     transform: scale(1.02);
   }
 
-  .district-mode-floating-pill {
+  .district-top-control-bar {
     top: 8px;
-    left: 10px;
-    right: 10px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+    max-width: calc(100% - 16px);
     font-size: 0.76rem;
-    padding: 5px 12px;
+    padding: 5px 8px;
     justify-content: space-between;
-    z-index: 840;
+    gap: 6px;
+    z-index: 860;
+  }
+
+  .dt-dist-name {
+    font-size: 0.82rem;
+  }
+
+  .dt-switch-select {
+    max-width: 105px;
+    font-size: 0.72rem;
+    padding: 3px 6px;
+  }
+
+  .dt-btn-thana, .dt-btn-exit {
+    padding: 4px 7px;
+    font-size: 0.72rem;
   }
 
   .district-modal-container {

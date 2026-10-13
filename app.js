@@ -2956,19 +2956,54 @@ function activateSingleDistrictMode(district) {
     state.map.removeLayer(state.markerCluster);
   }
 
+  // Hide countrywide Bangladesh national border so only this district's boundary shows
+  if (state.maskPolygon && state.map.hasLayer(state.maskPolygon)) {
+    try { state.map.removeLayer(state.maskPolygon); } catch(e){}
+  }
+
+  // Hide countrywide river lines and landmarks
+  if (state.riverLayers && state.riverLayers.length > 0) {
+    state.riverLayers.forEach(l => {
+      try { if (state.map.hasLayer(l)) state.map.removeLayer(l); } catch(e){}
+    });
+  }
+
+  // Clear any existing search or thana focus marker
+  if (state.searchMarker && state.map.hasLayer(state.searchMarker)) {
+    try { state.map.removeLayer(state.searchMarker); state.searchMarker = null; } catch(e){}
+  }
+  if (state.activeThanaMarker && state.map.hasLayer(state.activeThanaMarker)) {
+    try { state.map.removeLayer(state.activeThanaMarker); state.activeThanaMarker = null; } catch(e){}
+  }
+
+  // Clear any existing route polyline
+  if (state.routeLayer && state.map.hasLayer(state.routeLayer)) {
+    try { state.map.removeLayer(state.routeLayer); } catch(e){}
+  }
+  if (state.routeGlowLayer && state.map.hasLayer(state.routeGlowLayer)) {
+    try { state.map.removeLayer(state.routeGlowLayer); } catch(e){}
+  }
+  if (state.routeMarkers && state.routeMarkers.length > 0) {
+    state.routeMarkers.forEach(m => { try { state.map.removeLayer(m); } catch(e){} });
+  }
+  if (state.routeArrowMarkers && state.routeArrowMarkers.length > 0) {
+    state.routeArrowMarkers.forEach(m => { try { state.map.removeLayer(m); } catch(e){} });
+  }
+
   // Look up Authentic 64-District GeoJSON Feature
   const boundariesDb = (typeof BD_DISTRICT_BOUNDARIES !== 'undefined') ? BD_DISTRICT_BOUNDARIES : (window.BD_DISTRICT_BOUNDARIES || {});
   const feat = boundariesDb[district.name] || boundariesDb[(district.en || '').toLowerCase()];
 
   let districtBounds;
   if (feat) {
-    // 1. Inverted Mask: Softly dims everything outside this district so ONLY this district is highlighted!
+    // 1. Inverted Mask: Completely masks out everything outside this district (100% solid dark slate)
+    // Satisfies: "oi map a oi zila chara onno kono kisur data dekha jabe na"
     const maskCoords = makeDistrictInvertedMask(feat);
     if (maskCoords) {
       state.districtFocus.maskLayer = L.polygon(maskCoords, {
         stroke: false,
-        fillColor: '#090d16',
-        fillOpacity: 0.48,
+        fillColor: '#070b14',
+        fillOpacity: 1.0,
         interactive: false
       }).addTo(state.map);
     }
@@ -2976,12 +3011,11 @@ function activateSingleDistrictMode(district) {
     // 2. Authentic Geographic Polygon/MultiPolygon Boundary Outline
     state.districtFocus.boundaryLayer = L.geoJSON(feat, {
       style: {
-        color: '#059669',
+        color: '#10b981',
         weight: 3.5,
         opacity: 1,
         dashArray: '6, 6',
-        fillColor: '#10b981',
-        fillOpacity: 0.08,
+        fillColor: 'transparent',
         interactive: false
       }
     }).addTo(state.map);
@@ -2997,13 +3031,13 @@ function activateSingleDistrictMode(district) {
     );
   }
 
-  // Restrict camera to this district only with device-optimized padding & zoom
+  // Restrict camera strictly to this district so user cannot pan into other districts
   const isMobile = window.innerWidth <= 768;
   state.map.invalidateSize();
   if (isMobile) {
-    state.map.fitBounds(districtBounds, { padding: [18, 18], maxZoom: 11.5 });
-    state.map.setMinZoom(7);
-    state.map.setMaxBounds(districtBounds.pad(0.55));
+    state.map.fitBounds(districtBounds, { padding: [16, 16], maxZoom: 11.5 });
+    state.map.setMinZoom(7.5);
+    state.map.setMaxBounds(districtBounds.pad(0.2));
   } else {
     state.map.fitBounds(districtBounds, {
       paddingTopLeft: [440, 25],
@@ -3011,7 +3045,7 @@ function activateSingleDistrictMode(district) {
       maxZoom: 12
     });
     state.map.setMinZoom(8);
-    state.map.setMaxBounds(districtBounds.pad(0.4));
+    state.map.setMaxBounds(districtBounds.pad(0.18));
   }
 
   // Plot custom interactive markers for each thana of this district
@@ -3135,13 +3169,16 @@ function activateSingleDistrictMode(district) {
   const mDistBtn = document.getElementById('mobileDistrictBtn');
   if (mDistBtn) mDistBtn.classList.add('active');
 
-  // Show Floating Status Pill
-  const pill = document.getElementById('districtModeFloatingPill');
-  const pillText = document.getElementById('districtPillText');
-  if (pill && pillText) {
-    pillText.innerText = `${district.name} জেলা একক ম্যাপ সক্রিয়`;
-    pill.style.display = 'flex';
-  }
+  // Show Floating Top Control Bar (Desktop & Mobile)
+  const topBar = document.getElementById('districtTopControlBar');
+  const barDistName = document.getElementById('dtBarDistName');
+  const barThanaBadge = document.getElementById('dtBarThanaBadge');
+  const barSwitchSelect = document.getElementById('dtBarSwitchSelect');
+
+  if (topBar) topBar.style.display = 'flex';
+  if (barDistName) barDistName.innerText = `${district.name} জেলা`;
+  if (barThanaBadge) barThanaBadge.innerText = `${toBanglaNum(district.thanas.length)}টি থানা`;
+  if (barSwitchSelect) barSwitchSelect.value = district.name;
 
   // Refresh Leaflet size on mobile
   setTimeout(() => {
@@ -3176,6 +3213,18 @@ function exitSingleDistrictMode() {
     state.map.addLayer(state.markerCluster);
   }
 
+  // Restore countrywide Bangladesh national border
+  if (state.maskPolygon && !state.map.hasLayer(state.maskPolygon)) {
+    try { state.map.addLayer(state.maskPolygon); } catch(e){}
+  }
+
+  // Restore countrywide rivers if previously toggled on
+  if (state.riversVisible && state.riverLayers && state.riverLayers.length > 0) {
+    state.riverLayers.forEach(l => {
+      try { if (!state.map.hasLayer(l)) state.map.addLayer(l); } catch(e){}
+    });
+  }
+
   // Restore map camera to full Bangladesh
   if (state.map) {
     state.map.setMinZoom(7);
@@ -3186,17 +3235,19 @@ function exitSingleDistrictMode() {
   // Reset dropdowns
   const quickSelect = document.getElementById('quickDistrictSelect');
   if (quickSelect) quickSelect.value = '';
+  const dtBarSelect = document.getElementById('dtBarSwitchSelect');
+  if (dtBarSelect) dtBarSelect.value = '';
 
   // Reset mobile bottom nav district button
   const mDistBtn = document.getElementById('mobileDistrictBtn');
   if (mDistBtn) mDistBtn.classList.remove('active');
 
-  // Hide sidebar & pill
+  // Hide sidebar & top control bar
   const sidebar = document.getElementById('singleDistrictSidebar');
   if (sidebar) sidebar.classList.remove('active', 'mobile-expanded');
 
-  const pill = document.getElementById('districtModeFloatingPill');
-  if (pill) pill.style.display = 'none';
+  const topBar = document.getElementById('districtTopControlBar');
+  if (topBar) topBar.style.display = 'none';
 
   setTimeout(() => {
     state.map.invalidateSize();
@@ -3316,6 +3367,44 @@ function setupSingleDistrictModule() {
   document.getElementById('exitDistrictModeBtn')?.addEventListener('click', exitSingleDistrictMode);
   document.getElementById('backToAllBdBtn')?.addEventListener('click', exitSingleDistrictMode);
   document.getElementById('pillExitDistrictBtn')?.addEventListener('click', exitSingleDistrictMode);
+
+  // Top Control Bar Thanas button toggle
+  document.getElementById('dtBarThanasToggleBtn')?.addEventListener('click', () => {
+    const sidebar = document.getElementById('singleDistrictSidebar');
+    if (!sidebar) return;
+    if (window.innerWidth <= 768) {
+      toggleMobileDistrictDrawer();
+    } else {
+      sidebar.classList.toggle('active');
+    }
+  });
+
+  // Populate Top Control Bar District Switcher Dropdown
+  const dtBarSelect = document.getElementById('dtBarSwitchSelect');
+  if (dtBarSelect && typeof BD_DISTRICTS !== 'undefined') {
+    dtBarSelect.innerHTML = '<option value="">জেলা বদলান...</option>';
+    const divKeys = ['dhaka', 'chattogram', 'sylhet', 'rajshahi', 'khulna', 'barishal', 'rangpur', 'mymensingh'];
+    divKeys.forEach(dk => {
+      const group = document.createElement('optgroup');
+      group.label = getDivisionName(dk);
+      const dists = BD_DISTRICTS.filter(d => d.div === dk);
+      dists.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.name;
+        opt.textContent = `${d.name} (${d.en})`;
+        group.appendChild(opt);
+      });
+      dtBarSelect.appendChild(group);
+    });
+
+    dtBarSelect.addEventListener('change', () => {
+      const val = dtBarSelect.value;
+      if (val) {
+        const d = BD_DISTRICTS.find(item => item.name === val);
+        if (d) activateSingleDistrictMode(d);
+      }
+    });
+  }
 
   // Route to District Button
   document.getElementById('routeToDistrictBtn')?.addEventListener('click', () => {

@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -323,13 +323,26 @@
       </div>
     </div>
 
-    <!-- District Mode Active Status Floating Pill -->
-    <div class="district-mode-floating-pill" id="districtModeFloatingPill" style="display: none;">
-      <div class="pill-pulse-dot"></div>
-      <span id="districtPillText">ঢাকা জেলা একক ম্যাপ সক্রিয়</span>
-      <button id="pillExitDistrictBtn" title="সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরুন">
-        <i class="fa-solid fa-arrow-left"></i> সব জেলা
-      </button>
+    <!-- Dedicated Single District Top Control Bar (Desktop & Mobile) -->
+    <div class="district-top-control-bar" id="districtTopControlBar" style="display: none;">
+      <div class="dt-bar-left">
+        <span class="dt-pulse-dot"></span>
+        <strong class="dt-dist-name" id="dtBarDistName">ঢাকা জেলা</strong>
+        <span class="dt-badge" id="dtBarThanaBadge">১৩টি থানা</span>
+      </div>
+      <div class="dt-bar-center">
+        <select id="dtBarSwitchSelect" class="dt-switch-select" title="অন্য জেলা বেছে নিন">
+          <option value="">জেলা বদলান...</option>
+        </select>
+      </div>
+      <div class="dt-bar-right">
+        <button id="dtBarThanasToggleBtn" class="dt-btn-thana" title="থানা ও নদী বিবরণ">
+          <i class="fa-solid fa-list-check"></i> <span id="dtBarThanaBtnText">থানা তালিকা</span>
+        </button>
+        <button id="pillExitDistrictBtn" class="dt-btn-exit" title="সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যান">
+          <i class="fa-solid fa-arrow-left"></i> <span>সব জেলা</span>
+        </button>
+      </div>
     </div>
 
     <!-- Route & Distance Calculator Sidebar Panel -->
@@ -617,10 +630,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
-  <script src="bd_data.js?v=11"></script>
-  <script src="bd_districts_geojson.js?v=11"></script>
+  <script src="bd_data.js?v=12"></script>
+  <script src="bd_districts_geojson.js?v=12"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
