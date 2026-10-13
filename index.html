@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>বাংলাদেশ ম্যাপ (Bangladesh Map) | সম্পূর্ণ বাংলাদেশ মানচিত্র ও রুট ক্যালকুলেটর</title>
+  <meta name="description" content="বাংলাদেশ ম্যাপ - শুধুমাত্র বাংলাদেশ মানচিত্র। সকল থানা, গ্রাম, নদী ও সড়কপথের পূর্ণাঙ্গ বিবরণসহ দূরত্ব ও রুট নির্ণায়ক।">
+  <meta name="theme-color" content="#059669">
+  <meta property="og:title" content="বাংলাদেশ ম্যাপ (Bangladesh Map) | শুধুমাত্র বাংলাদেশ মানচিত্র">
+  <meta property="og:description" content="বাংলাদেশ ম্যাপ - সকল থানা, গ্রাম, নদী ও সড়কপথের পূর্ণাঙ্গ বিবরণসহ দূরত্ব ও রুট নির্ণায়ক।">
+  <meta property="og:type" content="website">
+
+  <!-- Favicon: Clean Bangladesh Map Pin -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 4 C18.7 4 8 14.7 8 28 C8 44 32 60 32 60 C32 60 56 44 56 28 C56 14.7 45.3 4 32 4 Z' fill='%23059669'/><circle cx='32' cy='26' r='12' fill='%23ef4444'/></svg>">
+
+  <!-- Google Fonts: Hind Siliguri (Bangla) & Outfit (Modern UI) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+  <!-- Header / Top Navigation Bar -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-logo">
+        <i class="fa-solid fa-map-location-dot"></i>
+      </div>
+      <div class="brand-text">
+        <h1>বাংলাদেশ ম্যাপ <span>(Bangladesh Map)</span></h1>
+        <p class="tagline">শুধুমাত্র বাংলাদেশ • সকল থানা, গ্রাম, নদী ও সড়কপথ</p>
+      </div>
+    </div>
+
+    <!-- Live Search Bar -->
+    <div class="search-container">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="text" id="searchInput" placeholder="যেকোনো থানা, গ্রাম, নদী বা স্থান সার্চ করুন (যেমন: আগৈলঝাড়া, রূপসা, টেকনাফ)..." autocomplete="off">
+        <button id="clearSearchBtn" class="clear-btn" style="display: none;"><i class="fa-solid fa-xmark"></i></button>
+        <button id="searchBtn" class="search-action-btn"><i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+      <div id="searchResults" class="search-dropdown"></div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <button id="thanaDirectoryToggleBtn" class="action-btn" title="সকল জেলা ও থানার তালিকা">
+        <i class="fa-solid fa-sitemap"></i>
+        <span>থানা ও জেলা</span>
+      </button>
+      <button id="riversToggleBtn" class="action-btn" title="প্রধান নদ-নদী হাইলাইট">
+        <i class="fa-solid fa-water"></i>
+        <span>নদ-নদী</span>
+      </button>
+      <button id="routeModeToggleBtn" class="action-btn highlight" title="দূরত্ব ও রুট নির্ণয়">
+        <i class="fa-solid fa-diamond-turn-right"></i>
+        <span>রুট ও দূরত্ব</span>
+      </button>
+      <button id="measureToolBtn" class="action-btn" title="ফিতা টুল (সরলরেখা দূরত্ব মাপুন)">
+        <i class="fa-solid fa-ruler-combined"></i>
+        <span>পরিমাপক</span>
+      </button>
+      <button id="locateMeBtn" class="action-btn icon-only" title="আমার বর্তমান অবস্থান">
+        <i class="fa-solid fa-crosshairs"></i>
+      </button>
+      <button id="fullscreenBtn" class="action-btn icon-only" title="ফুলস্ক্রিন ভিউ">
+        <i class="fa-solid fa-expand"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Divisions Quick Access Bar -->
+  <div class="divisions-bar">
+    <span class="div-label"><i class="fa-solid fa-compass"></i> বিভাগসমূহ:</span>
+    <div class="divisions-list" id="divisionsList">
+      <button class="div-chip active" data-div="all">সম্পূর্ণ বাংলাদেশ (Focus)</button>
+      <button class="div-chip" data-div="dhaka">ঢাকা</button>
+      <button class="div-chip" data-div="chattogram">চট্টগ্রাম</button>
+      <button class="div-chip" data-div="sylhet">সিলেট</button>
+      <button class="div-chip" data-div="rajshahi">রাজশাহী</button>
+      <button class="div-chip" data-div="khulna">খুলনা</button>
+      <button class="div-chip" data-div="barishal">বরিশাল</button>
+      <button class="div-chip" data-div="rangpur">রংপুর</button>
+      <button class="div-chip" data-div="mymensingh">ময়মনসিংহ</button>
+    </div>
+  </div>
+
+  <!-- Main Map Container -->
+  <main class="main-container">
+    <!-- The Leaflet Map Element -->
+    <div id="map"></div>
+
+    <!-- Floating Map Layer Switcher -->
+    <div class="map-layers-control">
+      <button class="layers-toggle-btn" id="layersToggleBtn" title="ম্যাপ ভিউ পরিবর্তন করুন">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>ম্যাপ লেয়ার</span>
+      </button>
+      <div class="layers-menu" id="layersMenu">
+        <div class="layer-item active" data-layer="osm">
+          <div class="layer-thumb osm-thumb"></div>
+          <span>স্ট্রিট, গ্রাম ও নদী ম্যাপ</span>
+        </div>
+        <div class="layer-item" data-layer="hot">
+          <div class="layer-thumb hot-thumb"></div>
+          <span>গ্রামীণ সড়ক ও বসতি (HOT)</span>
+        </div>
+        <div class="layer-item" data-layer="satellite">
+          <div class="layer-thumb sat-thumb"></div>
+          <span>বাস্তব স্যাটেলাইট ভিউ</span>
+        </div>
+        <div class="layer-item" data-layer="carto">
+          <div class="layer-thumb carto-thumb"></div>
+          <span>মডার্ন ক্লিন রোড (Google Roads)</span>
+        </div>
+        <div class="layer-item" data-layer="topo">
+          <div class="layer-thumb topo-thumb"></div>
+          <span>টপোগ্রাফি ও ভূ-প্রকৃতি (Terrain)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thana & District Directory Sidebar Panel -->
+    <aside class="thana-panel" id="thanaPanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fa-solid fa-sitemap text-emerald"></i>
+          <h3>বাংলাদেশ থানা ও জেলা ডিরেক্টরি</h3>
+        </div>
+        <button class="close-panel-btn" id="closeThanaPanelBtn">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="panel-body">
+        <div class="directory-filter-box">
+          <label><i class="fa-solid fa-filter"></i> বিভাগ নির্বাচন করুন:</label>
+          <select id="divSelectDropdown" class="form-select">
+            <option value="all">সকল বিভাগ (৮টি)</option>
+            <option value="dhaka">ঢাকা বিভাগ</option>
+            <option value="chattogram">চট্টগ্রাম বিভাগ</option>
+            <option value="sylhet">সিলেট বিভাগ</option>
+            <option value="rajshahi">রাজশাহী বিভাগ</option>
+            <option value="khulna">খুলনা বিভাগ</option>
+            <option value="barishal">বরিশাল বিভাগ</option>
+            <option value="rangpur">রংপুর বিভাগ</option>
+            <option value="mymensingh">ময়মনসিংহ বিভাগ</option>
+          </select>
+        </div>
+
+        <div class="directory-search">
+          <input type="text" id="thanaFilterInput" placeholder="জেলা বা থানার নাম দিয়ে ফিল্টার করুন..." autocomplete="off">
+        </div>
+
+        <div class="districts-accordion" id="districtsAccordion">
+          <!-- Dynamically populated 64 districts and their thanas -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- Route & Distance Calculator Sidebar Panel -->
+    <aside class="route-panel" id="routePanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i class="fa-solid fa-route"></i>
+          <h3>দূরত্ব ও রুট ক্যালকুলেটর</h3>
+        </div>
+        <button class="close-panel-btn" id="closeRoutePanelBtn">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Travel Mode Selector -->
+        <div class="travel-modes">
+          <button class="mode-btn active" data-mode="driving" title="গাড়ি / ড্রাইভিং">
+            <i class="fa-solid fa-car"></i>
+            <span>ড্রাইভিং</span>
+          </button>
+          <button class="mode-btn" data-mode="bike" title="মোটরসাইকেল">
+            <i class="fa-solid fa-motorcycle"></i>
+            <span>বাইক</span>
+          </button>
+          <button class="mode-btn" data-mode="walking" title="হাঁটা">
+            <i class="fa-solid fa-person-walking"></i>
+            <span>হাঁটা</span>
+          </button>
+        </div>
+
+        <!-- Waypoints Inputs with Autocomplete Dropdowns -->
+        <div class="waypoint-inputs">
+          <div class="input-row">
+            <div class="point-badge start-badge">A</div>
+            <div class="input-wrapper" id="startInputWrapper">
+              <input type="text" id="startInput" placeholder="শুরুর স্থান লিখুন বা ম্যাপে ক্লিক করুন..." autocomplete="off">
+              <button class="input-helper-btn" id="useCurrentLocationStart" title="বর্তমান লোকেশন ব্যবহার করুন">
+                <i class="fa-solid fa-crosshairs"></i>
+              </button>
+              <div id="startSuggestions" class="route-autocomplete-dropdown"></div>
+            </div>
+          </div>
+          <div class="switch-points-wrapper">
+            <button id="swapPointsBtn" class="swap-btn" title="শুরু ও গন্তব্য অদল-বদল করুন">
+              <i class="fa-solid fa-arrow-down-up-across-line"></i>
+            </button>
+          </div>
+          <div class="input-row">
+            <div class="point-badge end-badge">B</div>
+            <div class="input-wrapper" id="endInputWrapper">
+              <input type="text" id="endInput" placeholder="গন্তব্যের স্থান লিখুন বা ম্যাপে ক্লিক করুন..." autocomplete="off">
+              <div id="endSuggestions" class="route-autocomplete-dropdown"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="click-map-tip">
+          <i class="fa-regular fa-lightbulb"></i> টিপ: ম্যাপের যেকোনো দুটি স্থানে সরাসরি ক্লিক করেও রুট বের করতে পারেন!
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="route-actions">
+          <button id="calculateRouteBtn" class="btn primary-btn">
+            <i class="fa-solid fa-calculator"></i> দূরত্ব ও রুট বের করুন
+          </button>
+          <button id="clearRouteBtn" class="btn secondary-btn">
+            <i class="fa-solid fa-trash-can"></i> রুট মুছুন
+          </button>
+        </div>
+
+        <!-- Route Results Card -->
+        <div class="route-results-card" id="routeResultsCard" style="display: none;">
+          <div class="results-summary">
+            <div class="metric-box">
+              <span class="metric-label">মোট সড়ক দূরত্ব (Distance)</span>
+              <span class="metric-value" id="resDistance">০ কিমি</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric-box">
+              <span class="metric-label" id="resTimeLabel">ড্রাইভিং সময় (Est. Time)</span>
+              <span class="metric-value highlight" id="resTime">০ মিনিট</span>
+            </div>
+          </div>
+
+          <!-- Real-Time Mode Comparison Cards -->
+          <div class="modes-time-comparison" id="modesTimeComparison">
+            <div class="mode-time-chip active" id="chipDriving" data-mode="driving" title="গাড়ি/বাসে আনুমানিক সময়">
+              <i class="fa-solid fa-car"></i>
+              <div class="time-chip-text">
+                <span class="chip-label">ড্রাইভিং</span>
+                <span class="chip-val" id="timeCar">০ মিনিট</span>
+              </div>
+            </div>
+            <div class="mode-time-chip" id="chipBike" data-mode="bike" title="মোটরসাইকেলে আনুমানিক সময়">
+              <i class="fa-solid fa-motorcycle"></i>
+              <div class="time-chip-text">
+                <span class="chip-label">বাইক</span>
+                <span class="chip-val" id="timeBike">০ মিনিট</span>
+              </div>
+            </div>
+            <div class="mode-time-chip" id="chipWalking" data-mode="walking" title="পায়ে হেঁটে আনুমানিক সময়">
+              <i class="fa-solid fa-person-walking"></i>
+              <div class="time-chip-text">
+                <span class="chip-label">হাঁটা</span>
+                <span class="chip-val" id="timeWalk">০ মিনিট</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="route-summary-info">
+            <div class="info-row">
+              <i class="fa-solid fa-circle-dot text-green"></i>
+              <span class="route-label">শুরু:</span>
+              <span class="route-name" id="resStartName">-</span>
+            </div>
+            <div class="info-row">
+              <i class="fa-solid fa-location-dot text-red"></i>
+              <span class="route-label">গন্তব্য:</span>
+              <span class="route-name" id="resEndName">-</span>
+            </div>
+          </div>
+
+          <!-- Turn by Turn directions -->
+          <div class="turn-by-turn-section">
+            <button class="accordion-toggle" id="toggleStepsBtn">
+              <span><i class="fa-solid fa-diamond-turn-right"></i> টার্ন-বাই-টার্ন সড়ক ডিরেকশন</span>
+              <i class="fa-solid fa-chevron-down toggle-icon"></i>
+            </button>
+            <div class="steps-list" id="stepsList" style="display: none;"></div>
+          </div>
+        </div>
+
+        <!-- Popular City-to-City Distance Quick Links -->
+        <div class="popular-routes-section">
+          <h4><i class="fa-solid fa-fire"></i> জনপ্রিয় রুটসমূহের দূরত্ব:</h4>
+          <div class="popular-routes-grid">
+            <button class="pop-route-chip" data-from="ঢাকা" data-to="চট্টগ্রাম">ঢাকা ➔ চট্টগ্রাম</button>
+            <button class="pop-route-chip" data-from="ঢাকা" data-to="সিলেট">ঢাকা ➔ সিলেট</button>
+            <button class="pop-route-chip" data-from="ঢাকা" data-to="কক্সবাজার">ঢাকা ➔ কক্সবাজার</button>
+            <button class="pop-route-chip" data-from="ঢাকা" data-to="রাজশাহী">ঢাকা ➔ রাজশাহী</button>
+            <button class="pop-route-chip" data-from="ঢাকা" data-to="খুলনা">ঢাকা ➔ খুলনা</button>
+            <button class="pop-route-chip" data-from="ঢাকা" data-to="বরিশাল (পদ্মা সেতু)">ঢাকা ➔ বরিশাল</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Floating Live Measurement Tool HUD -->
+    <div class="measurement-hud" id="measurementHud" style="display: none;">
+      <div class="hud-content">
+        <i class="fa-solid fa-ruler-combined"></i>
+        <span>পরিমাপ মোড অন: ম্যাপে পয়েন্টে ক্লিক করুন</span>
+        <div class="measured-val-badge" id="hudMeasureVal">০ কিমি</div>
+        <button id="stopMeasureBtn" class="hud-close-btn" title="পরিমাপ বন্ধ করুন"><i class="fa-solid fa-check"></i> শেষ</button>
+      </div>
+    </div>
+
+    <!-- Bangladesh Only Active Indicator Pill -->
+    <div class="mask-status-badge">
+      <i class="fa-solid fa-shield-halved"></i>
+      <span>শুধুমাত্র বাংলাদেশ অঞ্চল সক্রিয়</span>
+    </div>
+
+    <!-- Quick Highlights Floating Pill -->
+    <div class="quick-places-dock">
+      <span class="dock-title"><i class="fa-solid fa-star"></i> জনপ্রিয় স্থান:</span>
+      <div class="dock-scroll">
+        <button class="place-badge" data-lat="21.4272" data-lng="91.9858" data-name="কক্সবাজার সমুদ্র সৈকত">কক্সবাজার</button>
+        <button class="place-badge" data-lat="23.7104" data-lng="90.4074" data-name="লালবাগ কেল্লা, ঢাকা">লালবাগ কেল্লা</button>
+        <button class="place-badge" data-lat="23.4756" data-lng="90.2608" data-name="পদ্মা সেতু">পদ্মা সেতু</button>
+        <button class="place-badge" data-lat="21.9015" data-lng="89.5843" data-name="সুন্দরবন ম্যানগ্রোভ বন">সুন্দরবন</button>
+        <button class="place-badge" data-lat="23.3852" data-lng="92.2938" data-name="সাজেক ভ্যালি">সাজেক ভ্যালি</button>
+        <button class="place-badge" data-lat="25.1764" data-lng="92.0163" data-name="জাফলং, সিলেট">জাফলং</button>
+        <button class="place-badge" data-lat="24.3065" data-lng="91.7296" data-name="শ্রীমঙ্গল চা বাগান">শ্রীমঙ্গল</button>
+        <button class="place-badge" data-lat="21.8167" data-lng="90.1167" data-name="কুয়াকাটা সমুদ্র সৈকত">কুয়াকাটা</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
+  <script src="bd_data.js?v=3"></script>
+
+  <!-- Custom JS Application -->
+  <script src="app.js?v=3"></script>
+</body>
+</html>

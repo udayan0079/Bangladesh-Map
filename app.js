@@ -1,0 +1,1651 @@
+/**
+ * BD Maps - Dedicated Bangladesh Only Map & Distance Calculator
+ * Features:
+ * 1. Inverse Mask (Only Bangladesh territory is visible; outside regions masked)
+ * 2. Complete 64 Districts and 460+ Thanas Directory with Deep Zoom (Village & Roads)
+ * 3. Major Rivers of Bangladesh Layer (পদ্মা, মেঘনা, যমুনা, ইত্যাদি)
+ * 4. High-Detail Tile Layers (OSM, HOT, Satellite, Topo)
+ * 5. Road Distance & Route Calculation with OSRM (KM and Time)
+ * 6. Interactive Measurement Tool (Ruler)
+ */
+
+// Global Application State
+const state = {
+  map: null,
+  activeLayer: null,
+  layers: {},
+  maskPolygon: null,
+  riverLayers: [],
+  riversVisible: true,
+  searchTimeout: null,
+  routePoints: {
+    start: null,
+    end: null
+  },
+  travelMode: 'driving',
+  routePolyline: null,
+  routeMarkers: [],
+  measureMode: false,
+  measurePoints: [],
+  measurePolyline: null,
+  measureMarkers: [],
+  totalMeasuredDist: 0,
+  userLocationMarker: null,
+  searchMarker: null,
+  activeThanaMarker: null
+};
+
+// Strict Bangladesh Geographic Bounds
+const BD_CENTER = [23.6850, 90.3563];
+const BD_BOUNDS = [
+  [20.2, 87.8], // South-West (includes St. Martin's & Bay of Bengal islands)
+  [26.9, 93.0]  // North-East (includes Tetulia & Bandarban borders)
+];
+
+// Division Quick Jump Centers
+const DIVISIONS = {
+  all: { center: BD_CENTER, zoom: 7.5, name: 'সম্পূর্ণ বাংলাদেশ' },
+  dhaka: { center: [23.8103, 90.4125], zoom: 10, name: 'ঢাকা বিভাগ' },
+  chattogram: { center: [22.3569, 91.7832], zoom: 9.5, name: 'চট্টগ্রাম বিভাগ' },
+  sylhet: { center: [24.8949, 91.8687], zoom: 9.5, name: 'সিলেট বিভাগ' },
+  rajshahi: { center: [24.3745, 88.6042], zoom: 9.5, name: 'রাজশাহী বিভাগ' },
+  khulna: { center: [22.8456, 89.5403], zoom: 9.5, name: 'খুলনা বিভাগ' },
+  barishal: { center: [22.7010, 90.3535], zoom: 9.5, name: 'বরিশাল বিভাগ' },
+  rangpur: { center: [25.7439, 89.2752], zoom: 9.5, name: 'রংপুর বিভাগ' },
+  mymensingh: { center: [24.7471, 90.4203], zoom: 9.5, name: 'ময়মনসিংহ বিভাগ' }
+};
+
+// Popular Routes Preset
+const POPULAR_LOCATIONS = {
+  'ঢাকা': { lat: 23.8103, lng: 90.4125, name: 'ঢাকা (Dhaka)' },
+  'চট্টগ্রাম': { lat: 22.3569, lng: 91.7832, name: 'চট্টগ্রাম (Chattogram)' },
+  'সিলেট': { lat: 24.8949, lng: 91.8687, name: 'সিলেট (Sylhet)' },
+  'কক্সবাজার': { lat: 21.4272, lng: 91.9858, name: 'কক্সবাজার (Cox\'s Bazar)' },
+  'রাজশাহী': { lat: 24.3745, lng: 88.6042, name: 'রাজশাহী (Rajshahi)' },
+  'খুলনা': { lat: 22.8456, lng: 89.5403, name: 'খুলনা (Khulna)' },
+  'বরিশাল (পদ্মা সেতু)': { lat: 22.7010, lng: 90.3535, name: 'বরিশাল (Barishal)' }
+};
+
+// Convert English numbers to Bengali numerals
+function toBanglaNum(num) {
+  if (num === null || num === undefined) return '';
+  const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return num.toString().replace(/\d/g, d => bnDigits[d]);
+}
+
+// Initialize Leaflet Map
+function initMap() {
+  state.map = L.map('map', {
+    center: BD_CENTER,
+    zoom: 7.5,
+    minZoom: 7,
+    maxZoom: 20,
+    maxBounds: BD_BOUNDS,
+    maxBoundsViscosity: 1.0, // Strictly prevent panning outside Bangladesh
+    zoomControl: false
+  });
+
+  // Dedicated Leaflet Pane for Outside Mask (Above tile layers at 200, below overlay routes at 400)
+  state.map.createPane('maskPane');
+  state.map.getPane('maskPane').style.zIndex = 350;
+  state.map.getPane('maskPane').style.pointerEvents = 'none';
+
+  // Custom Zoom Control at Bottom Right
+  L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+
+  // Setup Tile Layers with high resolution
+  state.layers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors (Bangladesh)'
+  });
+
+  state.layers.hot = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors, Tiles style by Humanitarian OSM'
+  });
+
+  // Google Hybrid Satellite: Photorealistic aerial photography with zero 'no data available' errors & clear labels
+  state.layers.satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: '&copy; Google Satellite Imagery (High-Resolution)'
+  });
+
+  // Google Clean Roads (Modern Clean Vector): Crisp authentic Google Maps roads, village pathways, highways & landmarks
+  state.layers.carto = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: '&copy; Google Maps (Clean Road Network)'
+  });
+  state.layers.clean = state.layers.carto;
+
+  // Google Terrain / Relief Map: High-res hillshading, contours, elevations, rivers & labels
+  state.layers.topo = L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    maxNativeZoom: 18,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: '&copy; Google Terrain (Hillshading & Physical Geography)'
+  });
+
+  // Add Default Layer
+  state.activeLayer = state.layers.osm;
+  state.activeLayer.addTo(state.map);
+
+  // Apply Bangladesh-Only Inverse Mask
+  applyBangladeshMask();
+
+  // Draw Major Rivers Layer (smooth curved waterways)
+  setupRiversLayer();
+
+  // Map Click Listener
+  state.map.on('click', handleMapClick);
+}
+
+// Apply Inverse Mask (Hides Everything Outside Bangladesh Borders)
+function applyBangladeshMask() {
+  if (typeof BD_BOUNDARY_GEOJSON === 'undefined' || !BD_BOUNDARY_GEOJSON.features) {
+    console.warn('BD_BOUNDARY_GEOJSON not loaded.');
+    return;
+  }
+
+  // World Outer Ring covering the whole globe
+  const worldOuterRing = [
+    [-90, -180],
+    [-90, 180],
+    [90, 180],
+    [90, -180],
+    [-90, -180]
+  ];
+
+  // Extract Holes: Bangladesh polygon boundaries converted to [lat, lng]
+  const holes = [];
+  BD_BOUNDARY_GEOJSON.features.forEach(feat => {
+    if (feat.geometry.type === 'Polygon') {
+      const ring = feat.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+      holes.push(ring);
+    } else if (feat.geometry.type === 'MultiPolygon') {
+      feat.geometry.coordinates.forEach(poly => {
+        const ring = poly[0].map(coord => [coord[1], coord[0]]);
+        holes.push(ring);
+      });
+    }
+  });
+
+  // Create Inverted Polygon with Dedicated maskPane
+  state.maskPolygon = L.polygon([worldOuterRing, ...holes], {
+    pane: 'maskPane',
+    color: '#10b981',       // Vibrant emerald border along Bangladesh border
+    weight: 2.5,
+    fillColor: '#0b1329',   // Masks outside regions (India, Myanmar, etc.)
+    fillOpacity: 0.98,
+    interactive: false      // Allow click events to pass
+  }).addTo(state.map);
+}
+
+// Major Rivers Layer of Bangladesh - Natural Curved Flow & Iconic Confluences
+function setupRiversLayer() {
+  if (typeof BD_RIVERS === 'undefined') return;
+
+  state.riverLayers = [];
+  state.riversVisible = false; // OFF by default so user sees clean realistic map
+
+  // Prominent Iconic River Ports & Confluences (মোহনা ও নদী বন্দর)
+  const RIVER_LANDMARKS = [
+    { name: "চাঁদপুর ইলিশের মোহনা (পদ্মা ও মেঘনা মিলনস্থল)", lat: 23.232, lng: 90.641, desc: "পদ্মা ও মেঘনা নদীর সুবিশাল মিলনস্থল, যা চাঁদপুরের বিখ্যাত ত্রিনদী মোহনা নামে পরিচিত।" },
+    { name: "গোয়ালন্দ ঘাট (পদ্মা ও যমুনা মিলনস্থল)", lat: 23.825, lng: 89.752, desc: "ঐতিহাসিক দৌলতদিয়া-গোয়ালন্দ পয়েন্টে যমুনা নদী এসে পদ্মায় মিলিত হয়েছে।" },
+    { name: "পদ্মা সেতু (মাওয়া-জাজিরা চ্যানেল)", lat: 23.4756, lng: 90.2608, desc: "পদ্মা নদীর ওপর নির্মিত ৬.১৫ কিমি দীর্ঘ ঐতিহাসিক পদ্মা সেতু।" },
+    { name: "বঙ্গবন্ধু সেতু (যমুনা নদী চ্যানেল)", lat: 24.398, lng: 89.778, desc: "টাঙ্গাইল ও সিরাজগঞ্জের সংযোগকারী যমুনা নদী সেতু।" },
+    { name: "ভৈরব মেঘনা সেতু (মেঘনা চ্যানেল)", lat: 24.045, lng: 91.012, desc: "মেঘনা নদীর ওপর নির্মিত ঐতিহাসিক ভৈরব-আশুগঞ্জ সেতু।" },
+    { name: "পতেঙ্গা মোহনা (কর্ণফুলী ও বঙ্গোপসাগর)", lat: 22.235, lng: 91.802, desc: "কর্ণফুলী নদী এখানে এসে বঙ্গোপসাগরে পতিত হয়েছে এবং চট্টগ্রাম বন্দর সুরক্ষিত রেখেছে।" },
+    { name: "সদরঘাট নদীবন্দর (বুড়িগঙ্গা নদী)", lat: 23.705, lng: 90.412, desc: "ঢাকা শহরের বুড়িগঙ্গার তীরে অবস্থিত দেশের অন্যতম প্রাচীন ও প্রধান নদীবন্দর।" }
+  ];
+
+  // Draw Natural Curved Waterways (Following actual river channels)
+  BD_RIVERS.forEach(river => {
+    const line = L.polyline(river.coords, {
+      color: '#0ea5e9',
+      weight: 5,
+      opacity: 0.75,
+      lineCap: 'round',
+      lineJoin: 'round',
+      smoothFactor: 2.0 // Spline curve smoothing
+    }).bindPopup(`
+      <div class="bd-popup">
+        <h4><i class="fa-solid fa-water text-emerald"></i> ${river.name}</h4>
+        <p>${river.desc}</p>
+      </div>
+    `);
+
+    state.riverLayers.push(line);
+  });
+
+  // Landmark Water Droplet Markers
+  RIVER_LANDMARKS.forEach(lm => {
+    const dropIcon = L.divIcon({
+      className: 'river-landmark-pin',
+      html: `
+        <div class="water-drop-marker" title="${lm.name}">
+          <i class="fa-solid fa-water"></i>
+        </div>
+      `,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+
+    const marker = L.marker([lm.lat, lm.lng], { icon: dropIcon }).bindPopup(`
+      <div class="bd-popup">
+        <h4><i class="fa-solid fa-anchor" style="color:#0284c7;"></i> ${lm.name}</h4>
+        <p>${lm.desc}</p>
+        <div class="popup-actions">
+          <button class="popup-btn btn-a" onclick="setRoutePointFromMap('start', ${lm.lat}, ${lm.lng}, '${lm.name.replace(/'/g, "\\'")}')">শুরু (A)</button>
+          <button class="popup-btn btn-b" onclick="setRoutePointFromMap('end', ${lm.lat}, ${lm.lng}, '${lm.name.replace(/'/g, "\\'")}')">গন্তব্য (B)</button>
+        </div>
+      </div>
+    `);
+
+    state.riverLayers.push(marker);
+  });
+
+  // Toggle button in header
+  const toggleBtn = document.getElementById('riversToggleBtn');
+  if (toggleBtn) {
+    toggleBtn.classList.remove('active-tool');
+    toggleBtn.addEventListener('click', () => {
+      state.riversVisible = !state.riversVisible;
+      state.riverLayers.forEach(layer => {
+        if (state.riversVisible) {
+          state.map.addLayer(layer);
+        } else {
+          state.map.removeLayer(layer);
+        }
+      });
+      toggleBtn.classList.toggle('active-tool', state.riversVisible);
+      showToast(state.riversVisible ? 'নদ-নদী ও মোহনা প্রদর্শিত হচ্ছে' : 'নদ-নদী লেয়ার বন্ধ করা হয়েছে');
+    });
+  }
+}
+
+// Map Layer Switcher
+function setupLayerSwitcher() {
+  const toggleBtn = document.getElementById('layersToggleBtn');
+  const menu = document.getElementById('layersMenu');
+
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.toggle('active');
+  });
+
+  document.addEventListener('click', () => {
+    menu.classList.remove('active');
+  });
+
+  document.querySelectorAll('.layer-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const layerKey = item.getAttribute('data-layer');
+      if (state.layers[layerKey] && state.activeLayer !== state.layers[layerKey]) {
+        state.map.removeLayer(state.activeLayer);
+        state.activeLayer = state.layers[layerKey];
+        state.activeLayer.addTo(state.map);
+
+        // Ensure Mask stays on top of the tiles
+        if (state.maskPolygon) {
+          state.maskPolygon.bringToFront();
+        }
+
+        document.querySelectorAll('.layer-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        showToast(`ম্যাপ ভিউ পরিবর্তন: ${item.querySelector('span').innerText}`);
+      }
+      menu.classList.remove('active');
+    });
+  });
+}
+
+// Thana & District Directory Sidebar
+function setupThanaDirectory() {
+  const toggleBtn = document.getElementById('thanaDirectoryToggleBtn');
+  const panel = document.getElementById('thanaPanel');
+  const closeBtn = document.getElementById('closeThanaPanelBtn');
+  const divSelect = document.getElementById('divSelectDropdown');
+  const searchInput = document.getElementById('thanaFilterInput');
+  const container = document.getElementById('districtsAccordion');
+
+  toggleBtn.addEventListener('click', () => {
+    panel.classList.toggle('active');
+    // Close route panel if open
+    document.getElementById('routePanel').classList.remove('active');
+  });
+
+  closeBtn.addEventListener('click', () => {
+    panel.classList.remove('active');
+  });
+
+  function renderDistricts(divFilter = 'all', searchQuery = '') {
+    container.innerHTML = '';
+    const query = searchQuery.trim().toLowerCase();
+
+    const filtered = BD_DISTRICTS.filter(d => {
+      const matchesDiv = divFilter === 'all' || d.div === divFilter;
+      const matchesSearch = !query || 
+        d.name.toLowerCase().includes(query) || 
+        d.en.toLowerCase().includes(query) ||
+        d.thanas.some(t => t.toLowerCase().includes(query));
+      return matchesDiv && matchesSearch;
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="padding:16px; text-align:center; color:#64748b;">কোনো জেলা বা থানা পাওয়া যায়নি।</div>';
+      return;
+    }
+
+    filtered.forEach(district => {
+      const card = document.createElement('div');
+      card.className = 'district-card';
+
+      card.innerHTML = `
+        <div class="district-header">
+          <span class="dist-title">
+            <i class="fa-solid fa-location-dot text-emerald"></i>
+            ${district.name} জেলা (${district.en})
+          </span>
+          <span class="dist-count">${toBanglaNum(district.thanas.length)} টি থানা</span>
+        </div>
+        <div class="thanas-grid">
+          ${district.thanas.map(thana => `
+            <button class="thana-chip" data-district="${district.name}" data-thana="${thana}" data-lat="${district.lat}" data-lng="${district.lng}">
+              ${thana}
+            </button>
+          `).join('')}
+        </div>
+      `;
+
+      // Click on District Header flies to District Center
+      card.querySelector('.district-header').addEventListener('click', () => {
+        state.map.flyTo([district.lat, district.lng], 12, { duration: 1.5 });
+        showThanaMarker(district.lat, district.lng, `${district.name} জেলা সদর`, `${district.name} জেলার সকল থানা ও ইউনিয়ন`);
+      });
+
+      // Click on Thana Chip
+      card.querySelectorAll('.thana-chip').forEach(chip => {
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const thanaName = chip.getAttribute('data-thana');
+          const distName = chip.getAttribute('data-district');
+          
+          // Search specific thana coordinates via Nominatim
+          searchAndFlyToThana(`${thanaName}, ${distName}, Bangladesh`, thanaName, distName);
+        });
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  divSelect.addEventListener('change', () => {
+    renderDistricts(divSelect.value, searchInput.value);
+  });
+
+  searchInput.addEventListener('input', () => {
+    renderDistricts(divSelect.value, searchInput.value);
+  });
+
+  // Initial Render
+  renderDistricts();
+}
+
+// Fly to specific Thana and show deep zoom
+async function searchAndFlyToThana(fullQuery, thanaName, distName) {
+  showToast(`${thanaName} থানায় যাওয়া হচ্ছে...`);
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&countrycodes=bd&format=json&limit=1`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      state.map.flyTo([lat, lng], 15, { duration: 1.5 });
+      showThanaMarker(lat, lng, `${thanaName} থানা/উপজেলা`, `${distName} জেলা, বাংলাদেশ`);
+    } else {
+      // Fallback to district center
+      const dist = BD_DISTRICTS.find(d => d.name === distName);
+      if (dist) {
+        state.map.flyTo([dist.lat, dist.lng], 13, { duration: 1.5 });
+        showThanaMarker(dist.lat, dist.lng, `${thanaName} থানা`, `${distName} জেলা`);
+      }
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function showThanaMarker(lat, lng, title, details) {
+  if (state.activeThanaMarker) state.map.removeLayer(state.activeThanaMarker);
+
+  const icon = L.divIcon({
+    className: 'custom-pin',
+    html: `
+      <div class="pin-pulse"></div>
+      <div class="pin-core pin-thana">
+        <i class="fa-solid fa-building-flag"></i>
+      </div>
+    `,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42]
+  });
+
+  state.activeThanaMarker = L.marker([lat, lng], { icon }).addTo(state.map);
+  state.activeThanaMarker.bindPopup(`
+    <div class="bd-popup">
+      <h4>${title}</h4>
+      <p>${details}</p>
+      <div class="popup-actions">
+        <button class="popup-btn btn-a" onclick="setRoutePointFromMap('start', ${lat}, ${lng}, '${title.replace(/'/g, "\\'")}')">শুরু (A)</button>
+        <button class="popup-btn btn-b" onclick="setRoutePointFromMap('end', ${lat}, ${lng}, '${title.replace(/'/g, "\\'")}')">গন্তব্য (B)</button>
+      </div>
+    </div>
+  `).openPopup();
+}
+
+// Live Search for Any Place, Thana, Village, or River in Bangladesh
+function setupSearch() {
+  const input = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('clearSearchBtn');
+  const resultsDiv = document.getElementById('searchResults');
+  const searchBtn = document.getElementById('searchBtn');
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim();
+    clearBtn.style.display = query ? 'flex' : 'none';
+
+    if (state.searchTimeout) clearTimeout(state.searchTimeout);
+
+    if (query.length < 2) {
+      resultsDiv.classList.remove('active');
+      return;
+    }
+
+    state.searchTimeout = setTimeout(() => {
+      performSearch(query);
+    }, 350);
+  });
+
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    clearBtn.style.display = 'none';
+    resultsDiv.classList.remove('active');
+    if (state.searchMarker) {
+      state.map.removeLayer(state.searchMarker);
+      state.searchMarker = null;
+    }
+  });
+
+  searchBtn.addEventListener('click', () => {
+    if (input.value.trim()) performSearch(input.value.trim());
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      performSearch(input.value.trim());
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-container')) {
+      resultsDiv.classList.remove('active');
+    }
+  });
+}
+
+async function performSearch(query) {
+  const resultsDiv = document.getElementById('searchResults');
+  resultsDiv.innerHTML = '<div class="search-loading"><i class="fa-solid fa-spinner fa-spin"></i> অনুসন্ধান করা হচ্ছে...</div>';
+  resultsDiv.classList.add('active');
+
+  const qLower = query.toLowerCase().trim();
+  const localResults = [];
+
+  // 1. Instant local search in 64 districts & 460+ thanas
+  if (typeof BD_DISTRICTS !== 'undefined') {
+    BD_DISTRICTS.forEach(d => {
+      if (d.name.toLowerCase().includes(qLower) || d.en.toLowerCase().includes(qLower)) {
+        localResults.push({
+          display_name: `${d.name} (${d.en}), ${d.name} জেলা, বাংলাদেশ`,
+          lat: d.lat,
+          lon: d.lng,
+          isLocal: true
+        });
+      }
+      d.thanas.forEach(th => {
+        if (th.toLowerCase().includes(qLower)) {
+          localResults.push({
+            display_name: `${th} থানা, ${d.name} জেলা, বাংলাদেশ`,
+            lat: d.lat,
+            lon: d.lng,
+            isLocal: true,
+            fullQuery: `${th}, ${d.name}, Bangladesh`
+          });
+        }
+      });
+    });
+  }
+
+  // 2. Fetch live Nominatim search with 6s timeout
+  let onlineResults = [];
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=bd&format=json&addressdetails=1&limit=6`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    onlineResults = await res.json();
+  } catch (err) {
+    console.warn('Search fetch error:', err);
+  }
+
+  const combined = [...localResults.slice(0, 4), ...(onlineResults || [])];
+  const seen = new Set();
+  const unique = combined.filter(item => {
+    const name = item.display_name.split(',')[0].toLowerCase().trim();
+    if (seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+
+  if (unique.length === 0) {
+    resultsDiv.innerHTML = '<div class="search-empty">কোনো স্থান খুঁজে পাওয়া যায়নি। সঠিক নাম দিয়ে চেষ্টা করুন।</div>';
+    return;
+  }
+
+  resultsDiv.innerHTML = '';
+  unique.slice(0, 7).forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'search-result-item';
+    
+    const displayName = item.display_name.split(',')[0];
+    const details = item.display_name.split(',').slice(1, 4).join(', ');
+
+    div.innerHTML = `
+      <i class="fa-solid fa-location-dot"></i>
+      <div class="result-texts">
+        <div class="result-main">${displayName}</div>
+        <div class="result-sub">${details || 'বাংলাদেশ'}</div>
+      </div>
+    `;
+
+    div.addEventListener('click', async () => {
+      let lat = parseFloat(item.lat);
+      let lon = parseFloat(item.lon);
+
+      if (item.fullQuery) {
+        try {
+          const res2 = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(item.fullQuery)}&countrycodes=bd&format=json&limit=1`);
+          const d2 = await res2.json();
+          if (d2 && d2.length > 0) {
+            lat = parseFloat(d2[0].lat);
+            lon = parseFloat(d2[0].lon);
+          }
+        } catch (e) {}
+      }
+
+      selectSearchResult({
+        lat: lat,
+        lon: lon,
+        display_name: item.display_name
+      });
+      resultsDiv.classList.remove('active');
+    });
+
+    resultsDiv.appendChild(div);
+  });
+}
+
+function selectSearchResult(place) {
+  const lat = parseFloat(place.lat);
+  const lng = parseFloat(place.lon);
+  const name = place.display_name.split(',')[0];
+
+  document.getElementById('searchInput').value = name;
+  state.map.flyTo([lat, lng], 15, { duration: 1.5 });
+
+  if (state.searchMarker) state.map.removeLayer(state.searchMarker);
+
+  const customIcon = L.divIcon({
+    className: 'custom-pin',
+    html: `
+      <div class="pin-pulse"></div>
+      <div class="pin-core pin-poi">
+        <i class="fa-solid fa-star"></i>
+      </div>
+    `,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42]
+  });
+
+  state.searchMarker = L.marker([lat, lng], { icon: customIcon }).addTo(state.map);
+  
+  const popupHtml = `
+    <div class="bd-popup">
+      <h4>${name}</h4>
+      <p>${place.display_name}</p>
+      <div class="popup-actions">
+        <button class="popup-btn btn-a" onclick="setRoutePointFromMap('start', ${lat}, ${lng}, '${name.replace(/'/g, "\\'")}')">শুরু (A)</button>
+        <button class="popup-btn btn-b" onclick="setRoutePointFromMap('end', ${lat}, ${lng}, '${name.replace(/'/g, "\\'")}')">গন্তব্য (B)</button>
+      </div>
+    </div>
+  `;
+
+  state.searchMarker.bindPopup(popupHtml).openPopup();
+}
+
+// Map Click Handler for Route & Measurement
+function handleMapClick(e) {
+  const { lat, lng } = e.latlng;
+
+  // Measurement Tool Mode
+  if (state.measureMode) {
+    addMeasurePoint(lat, lng);
+    return;
+  }
+
+  // Route Selection Mode
+  const routePanel = document.getElementById('routePanel');
+  if (routePanel.classList.contains('active')) {
+    if (!state.routePoints.start) {
+      setRoutePointFromMap('start', lat, lng, `পয়েন্ট A (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+      showToast('শুরুর স্থান নির্ধারিত হয়েছে। এবার গন্তব্য স্থানে ক্লিক করুন।');
+    } else if (!state.routePoints.end) {
+      setRoutePointFromMap('end', lat, lng, `পয়েন্ট B (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+      calculateRoute();
+    } else {
+      setRoutePointFromMap('end', lat, lng, `পয়েন্ট B (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+      calculateRoute();
+    }
+  }
+}
+
+// Set Route Points from Coordinates
+window.setRoutePointFromMap = function(pointType, lat, lng, name) {
+  state.routePoints[pointType] = { lat, lng, name };
+  const inputEl = document.getElementById(pointType === 'start' ? 'startInput' : 'endInput');
+  inputEl.value = name;
+
+  // Open Route Panel if not already open
+  const routePanel = document.getElementById('routePanel');
+  if (!routePanel.classList.contains('active')) {
+    routePanel.classList.add('active');
+  }
+
+  updateRouteMarkers();
+};
+
+// Update Start and End Markers
+function updateRouteMarkers() {
+  state.routeMarkers.forEach(m => state.map.removeLayer(m));
+  state.routeMarkers = [];
+
+  if (state.routePoints.start) {
+    const iconA = L.divIcon({
+      className: 'custom-pin',
+      html: `
+        <div class="pin-pulse"></div>
+        <div class="pin-core pin-start">
+          <i class="fa-solid fa-play"></i>
+        </div>
+      `,
+      iconSize: [32, 42],
+      iconAnchor: [16, 42]
+    });
+    const markerA = L.marker([state.routePoints.start.lat, state.routePoints.start.lng], { icon: iconA })
+      .bindPopup(`<b>শুরুর পয়েন্ট (A):</b> ${state.routePoints.start.name}`)
+      .addTo(state.map);
+    state.routeMarkers.push(markerA);
+  }
+
+  if (state.routePoints.end) {
+    const iconB = L.divIcon({
+      className: 'custom-pin',
+      html: `
+        <div class="pin-pulse"></div>
+        <div class="pin-core pin-end">
+          <i class="fa-solid fa-flag-checkered"></i>
+        </div>
+      `,
+      iconSize: [32, 42],
+      iconAnchor: [16, 42]
+    });
+    const markerB = L.marker([state.routePoints.end.lat, state.routePoints.end.lng], { icon: iconB })
+      .bindPopup(`<b>গন্তব্য পয়েন্ট (B):</b> ${state.routePoints.end.name}`)
+      .addTo(state.map);
+    state.routeMarkers.push(markerB);
+  }
+}
+
+// Resolve text to location coordinates if user typed without selecting
+async function resolveLocationByName(query, pointType) {
+  const cleanQ = query.trim().toLowerCase();
+  
+  // 1. Check local districts & thanas first
+  for (const dist of BD_DISTRICTS) {
+    if (dist.name.toLowerCase() === cleanQ || dist.en.toLowerCase() === cleanQ) {
+      state.routePoints[pointType] = { lat: dist.lat, lng: dist.lng, name: `${dist.name} (${dist.en})` };
+      updateRouteMarkers();
+      return true;
+    }
+    for (const thana of dist.thanas) {
+      if (thana.toLowerCase() === cleanQ || thana.toLowerCase().includes(cleanQ)) {
+        state.routePoints[pointType] = { lat: dist.lat, lng: dist.lng, name: `${thana}, ${dist.name}` };
+        updateRouteMarkers();
+        return true;
+      }
+    }
+  }
+
+  // 2. Query Nominatim for accurate place coordinates
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=bd&format=json&limit=1`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      const name = data[0].display_name.split(',')[0];
+      state.routePoints[pointType] = { lat, lng, name };
+      updateRouteMarkers();
+      return true;
+    }
+  } catch (e) {
+    console.error('Resolve error:', e);
+  }
+  return false;
+}
+
+// Calculate Route via OSRM API (Real Road Geometry & Distance)
+async function calculateRoute() {
+  const startInput = document.getElementById('startInput');
+  const endInput = document.getElementById('endInput');
+
+  // Auto-resolve typed text if user didn't click dropdown suggestion
+  if (!state.routePoints.start && startInput.value.trim()) {
+    showToast('শুরুর স্থান অনুসন্ধান করা হচ্ছে...');
+    const ok = await resolveLocationByName(startInput.value.trim(), 'start');
+    if (!ok) {
+      showToast('শুরুর স্থান খুঁজে পাওয়া যায়নি। তালিকা থেকে সিলেক্ট করুন।');
+      return;
+    }
+  }
+
+  if (!state.routePoints.end && endInput.value.trim()) {
+    showToast('গন্তব্য স্থান অনুসন্ধান করা হচ্ছে...');
+    const ok = await resolveLocationByName(endInput.value.trim(), 'end');
+    if (!ok) {
+      showToast('গন্তব্য স্থান খুঁজে পাওয়া যায়নি। তালিকা থেকে সিলেক্ট করুন।');
+      return;
+    }
+  }
+
+  const { start, end } = state.routePoints;
+  if (!start || !end) {
+    showToast('দয়া করে শুরু ও গন্তব্য উভয় স্থান নির্বাচন করুন!');
+    return;
+  }
+
+  const calcBtn = document.getElementById('calculateRouteBtn');
+  calcBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> হিসেব করা হচ্ছে...';
+  calcBtn.disabled = true;
+
+  try {
+    // We use driving profile on OSRM to get true Bangladesh road geometry and distance
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7500);
+    const res = await fetch(osrmUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+
+    if (!data.routes || data.routes.length === 0) {
+      renderHaversineFallback(start, end);
+      return;
+    }
+
+    const route = data.routes[0];
+    const distanceKm = (route.distance / 1000).toFixed(1);
+
+    document.getElementById('resDistance').innerText = `${toBanglaNum(distanceKm)} কিমি`;
+    document.getElementById('resStartName').innerText = start.name;
+    document.getElementById('resEndName').innerText = end.name;
+    document.getElementById('routeResultsCard').style.display = 'flex';
+
+    // Update Realistic Times for all modes (Driving, Bike, Walking)
+    updateAllModeTimes(distanceKm);
+
+    if (state.routePolyline) state.map.removeLayer(state.routePolyline);
+
+    const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+    state.routePolyline = L.polyline(coordinates, {
+      color: '#059669',
+      weight: 6,
+      opacity: 0.9,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(state.map);
+
+    state.map.fitBounds(state.routePolyline.getBounds(), { padding: [60, 60] });
+    renderStepsList(route.legs[0].steps);
+
+    showToast(`রুট ও বাস্তব সময় তৈরি হয়েছে! সড়ক দূরত্ব: ${toBanglaNum(distanceKm)} কিমি`);
+
+  } catch (err) {
+    console.error('Route error:', err);
+    renderHaversineFallback(start, end);
+  } finally {
+    calcBtn.innerHTML = '<i class="fa-solid fa-calculator"></i> দূরত্ব ও রুট বের করুন';
+    calcBtn.disabled = false;
+  }
+}
+
+// Calculate Real-World Bangladesh Travel Time based on Distance & Mode
+function calculateRealisticTravelTime(distanceKm, mode) {
+  const d = parseFloat(distanceKm);
+  if (isNaN(d) || d <= 0) return { minutes: 0, text: '০ মিনিট' };
+
+  let totalMinutes = 0;
+
+  if (mode === 'walking') {
+    // Average human walking speed: ~4.8 km/h
+    totalMinutes = Math.round((d / 4.8) * 60);
+  } else if (mode === 'bike') {
+    // Motorcycle: can bypass city bottlenecks, cruises at 58 km/h on regional/highway
+    if (d <= 10) {
+      totalMinutes = Math.round((d / 30) * 60) + 3;
+    } else {
+      const cityTime = (10 / 30) * 60;
+      const highwayTime = ((d - 10) / 58) * 60;
+      totalMinutes = Math.round(cityTime + highwayTime) + 6;
+    }
+  } else {
+    // Driving (Car / Bus / Microbus in Bangladesh road traffic conditions)
+    if (d <= 12) {
+      totalMinutes = Math.round((d / 20) * 60) + 5;
+    } else {
+      const cityTime = (12 / 20) * 60;
+      const highwayTime = ((d - 12) / 45) * 60;
+      const buffer = d > 50 ? 15 : 8; // Toll plaza & highway traffic factor
+      totalMinutes = Math.round(cityTime + highwayTime + buffer);
+    }
+  }
+
+  return {
+    minutes: totalMinutes,
+    text: formatMinutesToBangla(totalMinutes)
+  };
+}
+
+// Format duration minutes to Bengali text (minutes, hours, or days)
+function formatMinutesToBangla(totalMinutes) {
+  if (totalMinutes < 60) {
+    return `${toBanglaNum(totalMinutes)} মিনিট`;
+  } else if (totalMinutes < 1440) {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (mins === 0) return `${toBanglaNum(hours)} ঘণ্টা`;
+    return `${toBanglaNum(hours)} ঘণ্টা ${toBanglaNum(mins)} মিনিট`;
+  } else {
+    const days = Math.floor(totalMinutes / 1440);
+    const remainingMins = totalMinutes % 1440;
+    const hours = Math.floor(remainingMins / 60);
+    if (hours === 0) return `${toBanglaNum(days)} দিন`;
+    return `${toBanglaNum(days)} দিন ${toBanglaNum(hours)} ঘণ্টা`;
+  }
+}
+
+// Update all 3 Mode Times simultaneously in the UI
+function updateAllModeTimes(distanceKm) {
+  state.lastCalculatedDistanceKm = distanceKm;
+
+  const carData = calculateRealisticTravelTime(distanceKm, 'driving');
+  const bikeData = calculateRealisticTravelTime(distanceKm, 'bike');
+  const walkData = calculateRealisticTravelTime(distanceKm, 'walking');
+
+  const elCar = document.getElementById('timeCar');
+  if (elCar) elCar.innerText = carData.text;
+
+  const elBike = document.getElementById('timeBike');
+  if (elBike) elBike.innerText = bikeData.text;
+
+  const elWalk = document.getElementById('timeWalk');
+  if (elWalk) elWalk.innerText = walkData.text;
+
+  // Update Main Display
+  const resTime = document.getElementById('resTime');
+  const resTimeLabel = document.getElementById('resTimeLabel');
+
+  if (state.travelMode === 'walking') {
+    if (resTime) resTime.innerText = walkData.text;
+    if (resTimeLabel) resTimeLabel.innerText = 'হাঁটার সময় (Walking Time)';
+  } else if (state.travelMode === 'bike') {
+    if (resTime) resTime.innerText = bikeData.text;
+    if (resTimeLabel) resTimeLabel.innerText = 'বাইক সময় (Bike Time)';
+  } else {
+    if (resTime) resTime.innerText = carData.text;
+    if (resTimeLabel) resTimeLabel.innerText = 'ড্রাইভিং সময় (Driving Time)';
+  }
+
+  // Sync Active Mode Chips & Buttons
+  document.querySelectorAll('.mode-time-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.getAttribute('data-mode') === state.travelMode);
+  });
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === state.travelMode);
+  });
+}
+
+// Fallback straight-line distance if network fails
+function renderHaversineFallback(start, end) {
+  const dist = haversineDistance(start.lat, start.lng, end.lat, end.lng).toFixed(1);
+
+  document.getElementById('resDistance').innerText = `~${toBanglaNum(dist)} কিমি (সরলরেখা)`;
+  document.getElementById('resStartName').innerText = start.name;
+  document.getElementById('resEndName').innerText = end.name;
+  document.getElementById('routeResultsCard').style.display = 'flex';
+
+  updateAllModeTimes(dist);
+
+  if (state.routePolyline) state.map.removeLayer(state.routePolyline);
+  state.routePolyline = L.polyline([[start.lat, start.lng], [end.lat, end.lng]], {
+    color: '#0284c7',
+    dashArray: '8, 8',
+    weight: 4
+  }).addTo(state.map);
+
+  state.map.fitBounds(state.routePolyline.getBounds(), { padding: [50, 50] });
+  renderStepsList([]);
+  showToast('সড়ক নেটওয়ার্ক অনুপলব্ধ থাকায় সরাসরি সরলরেখা দূরত্ব দেখানো হচ্ছে।');
+}
+
+// Render Turn-by-Turn Steps
+function renderStepsList(steps) {
+  const listEl = document.getElementById('stepsList');
+  listEl.innerHTML = '';
+
+  if (!steps || steps.length === 0) {
+    listEl.innerHTML = '<div class="step-item">নদী বা প্রাকৃতিক ভূগোলের কারণে সরাসরি মোটর সড়ক রুট অনুপলব্ধ। সরলরেখা অনুসরণ করুন।</div>';
+    return;
+  }
+
+  steps.forEach((step, index) => {
+    if (!step.maneuver) return;
+    const item = document.createElement('div');
+    item.className = 'step-item';
+    const dist = (step.distance / 1000).toFixed(2);
+    const instruction = step.maneuver.instruction || step.name || `ধাপ ${index + 1}`;
+    
+    item.innerHTML = `
+      <span>${toBanglaNum(index + 1)}. ${instruction}</span>
+      <span class="step-dist">${toBanglaNum(dist)} কিমি</span>
+    `;
+    listEl.appendChild(item);
+  });
+}
+
+// Haversine Distance Formula
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Setup Route UI Handlers
+function setupRouteUI() {
+  const toggleBtn = document.getElementById('routeModeToggleBtn');
+  const panel = document.getElementById('routePanel');
+  const closeBtn = document.getElementById('closeRoutePanelBtn');
+  const clearBtn = document.getElementById('clearRouteBtn');
+  const calcBtn = document.getElementById('calculateRouteBtn');
+  const swapBtn = document.getElementById('swapPointsBtn');
+  const currentLocBtn = document.getElementById('useCurrentLocationStart');
+  const toggleStepsBtn = document.getElementById('toggleStepsBtn');
+
+  toggleBtn.addEventListener('click', () => {
+    panel.classList.toggle('active');
+    document.getElementById('thanaPanel').classList.remove('active');
+  });
+
+  closeBtn.addEventListener('click', () => {
+    panel.classList.remove('active');
+  });
+
+  clearBtn.addEventListener('click', () => {
+    state.routePoints.start = null;
+    state.routePoints.end = null;
+    state.lastCalculatedDistanceKm = null;
+    document.getElementById('startInput').value = '';
+    document.getElementById('endInput').value = '';
+    document.getElementById('routeResultsCard').style.display = 'none';
+
+    const startDrop = document.getElementById('startSuggestions');
+    if (startDrop) { startDrop.classList.remove('active'); startDrop.innerHTML = ''; }
+    const endDrop = document.getElementById('endSuggestions');
+    if (endDrop) { endDrop.classList.remove('active'); endDrop.innerHTML = ''; }
+
+    if (state.routePolyline) {
+      state.map.removeLayer(state.routePolyline);
+      state.routePolyline = null;
+    }
+    state.routeMarkers.forEach(m => state.map.removeLayer(m));
+    state.routeMarkers = [];
+    showToast('রুট ও দূরত্ব রিসেট করা হয়েছে।');
+  });
+
+  calcBtn.addEventListener('click', calculateRoute);
+
+  swapBtn.addEventListener('click', () => {
+    const temp = state.routePoints.start;
+    state.routePoints.start = state.routePoints.end;
+    state.routePoints.end = temp;
+
+    const startVal = document.getElementById('startInput').value;
+    document.getElementById('startInput').value = document.getElementById('endInput').value;
+    document.getElementById('endInput').value = startVal;
+
+    const startDrop = document.getElementById('startSuggestions');
+    if (startDrop) startDrop.classList.remove('active');
+    const endDrop = document.getElementById('endSuggestions');
+    if (endDrop) endDrop.classList.remove('active');
+
+    updateRouteMarkers();
+    if (state.routePoints.start && state.routePoints.end) {
+      calculateRoute();
+    }
+  });
+
+  currentLocBtn.addEventListener('click', () => {
+    getUserLocation((lat, lng) => {
+      setRoutePointFromMap('start', lat, lng, 'আমার বর্তমান লোকেশন');
+      showToast('বর্তমান লোকেশন শুরুর পয়েন্ট হিসেবে সেট করা হয়েছে!');
+    });
+  });
+
+  function setTravelMode(mode) {
+    state.travelMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+    });
+    document.querySelectorAll('.mode-time-chip').forEach(c => {
+      c.classList.toggle('active', c.getAttribute('data-mode') === mode);
+    });
+
+    if (state.lastCalculatedDistanceKm) {
+      updateAllModeTimes(state.lastCalculatedDistanceKm);
+    } else if (state.routePoints.start && state.routePoints.end) {
+      calculateRoute();
+    }
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setTravelMode(btn.getAttribute('data-mode'));
+    });
+  });
+
+  document.querySelectorAll('.mode-time-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      setTravelMode(chip.getAttribute('data-mode'));
+    });
+  });
+
+  toggleStepsBtn.addEventListener('click', () => {
+    const stepsList = document.getElementById('stepsList');
+    const icon = toggleStepsBtn.querySelector('.toggle-icon');
+    if (stepsList.style.display === 'none') {
+      stepsList.style.display = 'flex';
+      icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+    } else {
+      stepsList.style.display = 'none';
+      icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+    }
+  });
+
+  document.querySelectorAll('.pop-route-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const fromName = chip.getAttribute('data-from');
+      const toName = chip.getAttribute('data-to');
+
+      const fromData = POPULAR_LOCATIONS[fromName];
+      const toData = POPULAR_LOCATIONS[toName];
+
+      if (fromData && toData) {
+        setRoutePointFromMap('start', fromData.lat, fromData.lng, fromData.name);
+        setRoutePointFromMap('end', toData.lat, toData.lng, toData.name);
+        calculateRoute();
+      }
+    });
+  });
+
+  // Enable Live Autocomplete Dropdown for Point A and Point B
+  setupWaypointAutocomplete('startInput', 'startSuggestions', 'start');
+  setupWaypointAutocomplete('endInput', 'endSuggestions', 'end');
+}
+
+// Live Autocomplete Implementation for Route Waypoints
+function setupWaypointAutocomplete(inputId, dropdownId, pointType) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!input || !dropdown) return;
+
+  let timer = null;
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim();
+    if (timer) clearTimeout(timer);
+
+    if (query.length < 2) {
+      dropdown.classList.remove('active');
+      dropdown.innerHTML = '';
+      return;
+    }
+
+    // Show initial loading / fast local results
+    timer = setTimeout(async () => {
+      dropdown.innerHTML = '<div class="route-sugg-loading"><i class="fa-solid fa-spinner fa-spin"></i> স্থান খোঁজা হচ্ছে...</div>';
+      dropdown.classList.add('active');
+
+      const qLower = query.toLowerCase();
+      const localMatches = [];
+
+      // Phonetic transliteration dictionary for popular Bangladeshi locations
+      const phoneticAliases = {
+        'sarishabari': 'সরিষাবাড়ী',
+        'sarisha': 'সরিষাবাড়ী',
+        'dhanmondi': 'ধানমন্ডি',
+        'mirpur': 'মিরপুর',
+        'gulshan': 'গুলশান',
+        'uttara': 'উত্তরা',
+        'motijheel': 'মতিঝিল',
+        'mohammadpur': 'মোহাম্মদপুর',
+        'savar': 'সাভার',
+        'dhamrai': 'ধামরাই',
+        'keraniganj': 'কেরানীগঞ্জ',
+        'gazipur': 'গাজীপুর',
+        'tongi': 'টঙ্গী',
+        'kaliakair': 'কালিয়াকৈর',
+        'sreepur': 'শ্রীপুর',
+        'sonargaon': 'সোনারগাঁও',
+        'patenga': 'পতেঙ্গা',
+        'halishahar': 'হালিশহর',
+        'sitakunda': 'সীতাকুণ্ড',
+        'teknaf': 'টেকনাফ',
+        'maheshkhali': 'মহেশখালী',
+        'sreemangal': 'শ্রীমঙ্গল',
+        'jaflong': 'জাফলং',
+        'kuakata': 'কুয়াকাটা',
+        'sundarbans': 'সুন্দরবন',
+        'sajek': 'সাজেক',
+        'rupsha': 'রূপসা',
+        'mongla': 'মোংলা',
+        'ishwardi': 'ঈশ্বরদী',
+        'sherpur': 'শেরপুর',
+        'melandaha': 'মেলান্দহ',
+        'islampur': 'ইসলামপুর',
+        'madarganj': 'মাদারগঞ্জ',
+        'dewanganj': 'দেওয়ানগঞ্জ',
+        'bakshiganj': 'বকশীগঞ্জ',
+        'jamalpur': 'জামালপুর',
+        'bhola': 'ভোলা',
+        'chakaria': 'চকোরিয়া',
+        'pekua': 'পেকুয়া',
+        'ukhiya': 'উখিয়া',
+        'ramu': 'রামু',
+        'tetulia': 'তেঁতুলিয়া',
+        'panchagarh': 'পঞ্চগড়',
+        'dinajpur': 'দিনাজপুর',
+        'bogura': 'বগুড়া',
+        'bogra': 'বগুড়া',
+        'naogaon': 'নওগাঁ',
+        'natore': 'নাটোর',
+        'sirajganj': 'সিরাজগঞ্জ',
+        'tangail': 'টাঙ্গাইল',
+        'kishoreganj': 'কিশোরগঞ্জ',
+        'manikganj': 'মানিকগঞ্জ',
+        'munshiganj': 'মুন্সীগঞ্জ',
+        'narsingdi': 'নরসিংদী',
+        'faridpur': 'ফরিদপুর',
+        'gopalganj': 'গোপালগঞ্জ',
+        'madaripur': 'মাদারীপুর',
+        'rajbari': 'রাজবাড়ী',
+        'shariatpur': 'শরীয়তপুর',
+        'coxsbazar': 'কক্সবাজার',
+        'coxs bazar': 'কক্সবাজার',
+        'cumilla': 'কুমিল্লা',
+        'comilla': 'কুমিল্লা',
+        'brahmanbaria': 'ব্রাহ্মণবাড়িয়া',
+        'chandpur': 'চাঁদপুর',
+        'noakhali': 'নোয়াখালী',
+        'feni': 'ফেনী',
+        'lakshmipur': 'লক্ষ্মীপুর',
+        'rangamati': 'রাঙ্গামাটি',
+        'bandarban': 'বান্দরবান',
+        'khagrachhari': 'খাগড়াছড়ি',
+        'moulvibazar': 'মৌলভীবাজার',
+        'habiganj': 'হবিগঞ্জ',
+        'sunamganj': 'সুনামগঞ্জ',
+        'jashore': 'যশোর',
+        'jessore': 'যশোর',
+        'kushtia': 'কুষ্টিয়া',
+        'satkhira': 'সাতক্ষীরা',
+        'jhenaidah': 'ঝিনাইদহ',
+        'bagerhat': 'বাগেরহাট',
+        'chuadanga': 'চুয়াডাঙ্গা',
+        'meherpur': 'মেহেরপুর',
+        'magura': 'মাগুরা',
+        'narail': 'নড়াইল',
+        'patuakhali': 'পটুয়াখালী',
+        'pirojpur': 'পিরোজপুর',
+        'barguna': 'বরগুনা',
+        'jhalakathi': 'ঝালকাঠি',
+        'kurigram': 'কুড়িগ্রাম',
+        'gaibandha': 'গাইবান্ধা',
+        'nilphamari': 'নীলফামারী',
+        'lalmonirhat': 'লালমনিরহাট',
+        'thakurgaon': 'ঠাকুরগাঁও',
+        'netrokona': 'নেত্রকোণা'
+      };
+
+      // Check if typed English has a direct phonetic match
+      let matchedBn = null;
+      for (const [enKey, bnVal] of Object.entries(phoneticAliases)) {
+        if (enKey.startsWith(qLower) || qLower.startsWith(enKey)) {
+          matchedBn = bnVal;
+          break;
+        }
+      }
+
+      // 1. Search Local Bangladesh Districts & Thanas Dataset
+      if (typeof BD_DISTRICTS !== 'undefined') {
+        BD_DISTRICTS.forEach(d => {
+          const matchDist = d.name.toLowerCase().includes(qLower) || 
+                            d.en.toLowerCase().includes(qLower) ||
+                            (matchedBn && d.name.includes(matchedBn));
+
+          if (matchDist) {
+            localMatches.push({
+              name: `${d.name} (${d.en})`,
+              sub: `${d.name} জেলা, বাংলাদেশ`,
+              lat: d.lat,
+              lng: d.lng,
+              icon: 'fa-building-flag'
+            });
+          }
+
+          d.thanas.forEach(thana => {
+            const matchThana = thana.toLowerCase().includes(qLower) || 
+                               (matchedBn && thana.includes(matchedBn));
+            if (matchThana) {
+              localMatches.push({
+                name: thana,
+                sub: `${d.name} জেলা, বাংলাদেশ`,
+                lat: d.lat,
+                lng: d.lng,
+                icon: 'fa-location-dot',
+                fullQuery: `${thana}, ${d.name}, Bangladesh`
+              });
+            }
+          });
+        });
+      }
+
+      // 2. Fetch Live Nominatim Bangladesh Geocoding (works with English and Bengali)
+      let onlineMatches = [];
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=bd&format=json&addressdetails=1&limit=5`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          onlineMatches = data.map(item => ({
+            name: item.display_name.split(',')[0],
+            sub: item.display_name.split(',').slice(1, 3).join(', ') || 'বাংলাদেশ',
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+            icon: 'fa-location-dot'
+          }));
+        }
+      } catch (err) {
+        console.warn('Autocomplete fetch error:', err);
+      }
+
+      // Combine local & online results and remove duplicates
+      const allResults = [...localMatches.slice(0, 4), ...onlineMatches];
+      const seen = new Set();
+      const uniqueResults = allResults.filter(item => {
+        const key = item.name.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      if (uniqueResults.length === 0) {
+        dropdown.innerHTML = '<div class="route-sugg-loading" style="color:#94a3b8;">কোনো স্থান খুঁজে পাওয়া যায়নি</div>';
+        return;
+      }
+
+      dropdown.innerHTML = '';
+      uniqueResults.slice(0, 6).forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'route-suggestion-item';
+        div.innerHTML = `
+          <i class="fa-solid ${item.icon || 'fa-location-dot'}"></i>
+          <div class="route-sugg-texts">
+            <span class="route-sugg-main">${item.name}</span>
+            <span class="route-sugg-sub">${item.sub}</span>
+          </div>
+        `;
+
+        div.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          let finalLat = item.lat;
+          let finalLng = item.lng;
+
+          // If local thana item has fullQuery, refine exact coordinates via Nominatim
+          if (item.fullQuery) {
+            try {
+              const res2 = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(item.fullQuery)}&countrycodes=bd&format=json&limit=1`);
+              const d2 = await res2.json();
+              if (d2 && d2.length > 0) {
+                finalLat = parseFloat(d2[0].lat);
+                finalLng = parseFloat(d2[0].lon);
+              }
+            } catch (err) {}
+          }
+
+          input.value = item.name;
+          state.routePoints[pointType] = { lat: finalLat, lng: finalLng, name: item.name };
+          dropdown.classList.remove('active');
+          dropdown.innerHTML = '';
+
+          updateRouteMarkers();
+          state.map.flyTo([finalLat, finalLng], 13, { duration: 1.2 });
+          showToast(`${pointType === 'start' ? 'শুরুর স্থান (A)' : 'গন্তব্য (B)'} নির্বাচন: ${item.name}`);
+
+          // If both A and B are set, auto-calculate route!
+          if (state.routePoints.start && state.routePoints.end) {
+            calculateRoute();
+          }
+        });
+
+        dropdown.appendChild(div);
+      });
+    }, 250);
+  });
+
+  // Close dropdown on click outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest(`#${inputId}Wrapper`)) {
+      dropdown.classList.remove('active');
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      dropdown.classList.remove('active');
+    }
+  });
+}
+
+// Ruler / Measurement Tool
+function setupMeasurementTool() {
+  const toolBtn = document.getElementById('measureToolBtn');
+  const hud = document.getElementById('measurementHud');
+  const stopBtn = document.getElementById('stopMeasureBtn');
+
+  toolBtn.addEventListener('click', () => {
+    state.measureMode = !state.measureMode;
+    if (state.measureMode) {
+      toolBtn.classList.add('active-tool');
+      hud.style.display = 'block';
+      clearMeasurement();
+      showToast('পরিমাপ মোড অন: ম্যাপে যেকোনো পয়েন্টে ক্লিক করুন।');
+    } else {
+      stopMeasurement();
+    }
+  });
+
+  stopBtn.addEventListener('click', stopMeasurement);
+}
+
+function stopMeasurement() {
+  state.measureMode = false;
+  document.getElementById('measureToolBtn').classList.remove('active-tool');
+  document.getElementById('measurementHud').style.display = 'none';
+  clearMeasurement();
+  showToast('পরিমাপ সম্পন্ন হয়েছে।');
+}
+
+function addMeasurePoint(lat, lng) {
+  state.measurePoints.push([lat, lng]);
+
+  const marker = L.circleMarker([lat, lng], {
+    radius: 6,
+    fillColor: '#f59e0b',
+    color: '#ffffff',
+    weight: 2,
+    fillOpacity: 1
+  }).addTo(state.map);
+  state.measureMarkers.push(marker);
+
+  if (state.measurePoints.length > 1) {
+    if (state.measurePolyline) state.map.removeLayer(state.measurePolyline);
+
+    state.measurePolyline = L.polyline(state.measurePoints, {
+      color: '#f59e0b',
+      weight: 4,
+      dashArray: '6, 6'
+    }).addTo(state.map);
+
+    let total = 0;
+    for (let i = 0; i < state.measurePoints.length - 1; i++) {
+      const p1 = state.measurePoints[i];
+      const p2 = state.measurePoints[i+1];
+      total += haversineDistance(p1[0], p1[1], p2[0], p2[1]);
+    }
+    state.totalMeasuredDist = total;
+    document.getElementById('hudMeasureVal').innerText = `${toBanglaNum(total.toFixed(2))} কিমি`;
+  }
+}
+
+function clearMeasurement() {
+  state.measurePoints = [];
+  state.totalMeasuredDist = 0;
+  if (state.measurePolyline) {
+    state.map.removeLayer(state.measurePolyline);
+    state.measurePolyline = null;
+  }
+  state.measureMarkers.forEach(m => state.map.removeLayer(m));
+  state.measureMarkers = [];
+  document.getElementById('hudMeasureVal').innerText = '০ কিমি';
+}
+
+// User Geolocation
+function setupLocateMe() {
+  const btn = document.getElementById('locateMeBtn');
+  btn.addEventListener('click', () => {
+    getUserLocation((lat, lng) => {
+      state.map.flyTo([lat, lng], 15, { duration: 1.5 });
+
+      if (state.userLocationMarker) state.map.removeLayer(state.userLocationMarker);
+
+      const userIcon = L.divIcon({
+        className: 'custom-pin',
+        html: `
+          <div class="pin-pulse"></div>
+          <div class="pin-core pin-start" style="background:#0284c7;">
+            <i class="fa-solid fa-user"></i>
+          </div>
+        `,
+        iconSize: [32, 42],
+        iconAnchor: [16, 42]
+      });
+
+      state.userLocationMarker = L.marker([lat, lng], { icon: userIcon })
+        .bindPopup('<b>আপনার বর্তমান অবস্থান (You are here)</b>')
+        .addTo(state.map)
+        .openPopup();
+
+      showToast('আপনার অবস্থান শনাক্ত করা হয়েছে!');
+    });
+  });
+}
+
+function getUserLocation(callback) {
+  if (!navigator.geolocation) {
+    showToast('আপনার ব্রাউজার লোকেশন সার্ভিস সাপোর্ট করে না।');
+    return;
+  }
+  showToast('লোকেশন খোঁজা হচ্ছে...');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      callback(pos.coords.latitude, pos.coords.longitude);
+    },
+    (err) => {
+      showToast('লোকেশন পারমিশন পাওয়া যায়নি। ম্যানুয়ালি সিলেক্ট করুন।');
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+// Divisions Quick Filter
+function setupDivisionsBar() {
+  document.querySelectorAll('.div-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.div-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+
+      const divKey = chip.getAttribute('data-div');
+      const divData = DIVISIONS[divKey];
+
+      if (divData) {
+        state.map.flyTo(divData.center, divData.zoom, { duration: 1.5 });
+        showToast(`${divData.name}-এ জুম করা হয়েছে`);
+      }
+    });
+  });
+}
+
+// Quick Landmarks Dock
+function setupQuickPlaces() {
+  document.querySelectorAll('.place-badge').forEach(badge => {
+    badge.addEventListener('click', () => {
+      const lat = parseFloat(badge.getAttribute('data-lat'));
+      const lng = parseFloat(badge.getAttribute('data-lng'));
+      const name = badge.getAttribute('data-name');
+
+      state.map.flyTo([lat, lng], 14, { duration: 1.5 });
+
+      const icon = L.divIcon({
+        className: 'custom-pin',
+        html: `
+          <div class="pin-pulse"></div>
+          <div class="pin-core pin-poi">
+            <i class="fa-solid fa-camera"></i>
+          </div>
+        `,
+        iconSize: [32, 42],
+        iconAnchor: [16, 42]
+      });
+
+      if (state.searchMarker) state.map.removeLayer(state.searchMarker);
+
+      state.searchMarker = L.marker([lat, lng], { icon })
+        .bindPopup(`
+          <div class="bd-popup">
+            <h4>${name}</h4>
+            <p>বাংলাদেশের জনপ্রিয় দর্শনীয় স্থান</p>
+            <div class="popup-actions">
+              <button class="popup-btn btn-a" onclick="setRoutePointFromMap('start', ${lat}, ${lng}, '${name}')">শুরু (A)</button>
+              <button class="popup-btn btn-b" onclick="setRoutePointFromMap('end', ${lat}, ${lng}, '${name}')">গন্তব্য (B)</button>
+            </div>
+          </div>
+        `)
+        .addTo(state.map)
+        .openPopup();
+    });
+  });
+}
+
+// Fullscreen
+function setupFullscreen() {
+  const btn = document.getElementById('fullscreenBtn');
+  btn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      btn.innerHTML = '<i class="fa-solid fa-compress"></i>';
+    } else {
+      document.exitFullscreen().catch(() => {});
+      btn.innerHTML = '<i class="fa-solid fa-expand"></i>';
+    }
+  });
+}
+
+// Toast
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.innerText = msg;
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3200);
+}
+
+// Global Keyboard Shortcuts (Esc to dismiss, '/' to search)
+function setupGlobalShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Esc closes all modals, panels, and dropdowns
+    if (e.key === 'Escape') {
+      const routePanel = document.getElementById('routePanel');
+      if (routePanel) routePanel.classList.remove('active');
+      const thanaPanel = document.getElementById('thanaPanel');
+      if (thanaPanel) thanaPanel.classList.remove('active');
+      const menu = document.getElementById('layersMenu');
+      if (menu) menu.classList.remove('active');
+      const sDrop = document.getElementById('searchResults');
+      if (sDrop) sDrop.classList.remove('active');
+      const startSugg = document.getElementById('startSuggestions');
+      if (startSugg) startSugg.classList.remove('active');
+      const endSugg = document.getElementById('endSuggestions');
+      if (endSugg) endSugg.classList.remove('active');
+    }
+
+    // '/' or Ctrl+K to quick-focus search (if not already typing in an input)
+    if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      const sInput = document.getElementById('searchInput');
+      if (sInput) {
+        sInput.focus();
+        sInput.select();
+      }
+    }
+  });
+}
+
+// Application Initialization
+window.addEventListener('DOMContentLoaded', () => {
+  initMap();
+  setupLayerSwitcher();
+  setupThanaDirectory();
+  setupSearch();
+  setupRouteUI();
+  setupMeasurementTool();
+  setupLocateMe();
+  setupDivisionsBar();
+  setupQuickPlaces();
+  setupFullscreen();
+  setupGlobalShortcuts();
+});
