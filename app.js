@@ -25,6 +25,8 @@ const state = {
   travelMode: 'driving',
   routePolyline: null,
   routeMarkers: [],
+  routeArrowMarkers: [],
+  lang: localStorage.getItem('bd_map_lang') || 'bn',
   measureMode: false,
   measurePoints: [],
   measurePolyline: null,
@@ -78,11 +80,154 @@ const POPULAR_LOCATIONS = {
   'বরিশাল (পদ্মা সেতু)': { lat: 22.7010, lng: 90.3535, name: 'বরিশাল (Barishal)' }
 };
 
-// Convert English numbers to Bengali numerals
-function toBanglaNum(num) {
+// Bilingual Translation Dictionary (Bangla & English)
+const I18N = {
+  bn: {
+    appTitle: 'বাংলাদেশ ম্যাপ',
+    appSubtitle: '(Bangladesh Map)',
+    tagline: 'শুধুমাত্র বাংলাদেশ • সকল থানা, গ্রাম, নদী ও সড়কপথ',
+    searchPlaceholder: 'যেকোনো থানা, গ্রাম, নদী বা স্থান সার্চ করুন...',
+    whereToGo: 'কোথায় যেতে চান?',
+    mobileWhereToGo: 'কোথায় যাবেন?',
+    thanaDistrict: 'থানা ও জেলা',
+    rivers: 'নদ-নদী',
+    routeDist: 'রুট ও দূরত্ব',
+    ruler: 'পরিমাপক',
+    myLocation: 'আমার অবস্থান',
+    divisions: 'বিভাগসমূহ:',
+    allBd: 'সম্পূর্ণ বাংলাদেশ (Focus)',
+    mapLayers: 'ম্যাপ লেয়ার',
+    thanaDirTitle: 'বাংলাদেশ থানা ও জেলা ডিরেক্টরি',
+    routePanelTitle: 'কোথায় যেতে চান? (রুট প্ল্যানার)',
+    car: 'গাড়ি (Car)',
+    bike: 'বাইক (Bike)',
+    train: 'ট্রেন (Train)',
+    startPlaceholder: 'যাত্রা শুরুর স্থান লিখুন (Start Journey)...',
+    endPlaceholder: 'গন্তব্যের স্থান লিখুন (Destination Journey)...',
+    calcRouteBtn: 'সর্বনিম্ন রুট ও দিকনির্দেশনা দেখুন',
+    clearRouteBtn: 'রুট মুছুন',
+    mapClickTip: 'টিপ: ম্যাপের যেকোনো দুটি স্থানে সরাসরি ক্লিক করেও রুট বের করতে পারেন!',
+    shortestDist: 'সর্বনিম্ন সড়ক দূরত্ব (Shortest)',
+    estTime: 'আনুমানিক সময় (Est. Time)',
+    liveNavBtn: '▶ লাইভ নেভিগেশন সিমুলেশন (চলুন)',
+    startLabel: 'শুরু:',
+    endLabel: 'গন্তব্য:',
+    turnDirections: 'টার্ন-বাই-টার্ন সড়ক ডিরেকশন',
+    popularRoutesTitle: 'জনপ্রিয় রুটসমূহের দূরত্ব:',
+    remainingDist: 'বাকি দূরত্ব',
+    remainingTime: 'বাকি সময়',
+    speedBoost: 'স্পিড বুস্ট',
+    straightRoad: 'সোজা প্রধান সড়ক অনুসরণ করুন',
+    navLiveDriving: 'লাইভ কার ড্রাইভিং',
+    navLiveBiking: 'লাইভ বাইকিং',
+    navLiveTrain: 'লাইভ রেল যাত্রা',
+    quickPlaces: 'জনপ্রিয় স্থান:',
+    reroutingMsg: '⚠️ রুট পরিবর্তন শনাক্ত! নতুন শর্টেস্ট রুট হিসাব হচ্ছে...'
+  },
+  en: {
+    appTitle: 'Bangladesh Map',
+    appSubtitle: '(বাংলাদেশ ম্যাপ)',
+    tagline: 'Bangladesh Territory Only • All Thanas, Villages, Rivers & Roads',
+    searchPlaceholder: 'Search any thana, village, river or place...',
+    whereToGo: 'Where to go?',
+    mobileWhereToGo: 'Where to go?',
+    thanaDistrict: 'Thana & District',
+    rivers: 'Rivers',
+    routeDist: 'Route & Directions',
+    ruler: 'Measure',
+    myLocation: 'My Location',
+    divisions: 'Divisions:',
+    allBd: 'All Bangladesh (Focus)',
+    mapLayers: 'Map Layers',
+    thanaDirTitle: 'Bangladesh Thana & District Directory',
+    routePanelTitle: 'Where do you want to go? (Route Planner)',
+    car: 'Car',
+    bike: 'Bike',
+    train: 'Train',
+    startPlaceholder: 'Enter start point (Start Journey)...',
+    endPlaceholder: 'Enter destination (Destination Journey)...',
+    calcRouteBtn: 'Find Shortest Route & Directions',
+    clearRouteBtn: 'Clear Route',
+    mapClickTip: 'Tip: Click any two locations on the map to find route directly!',
+    shortestDist: 'Shortest Distance',
+    estTime: 'Estimated Time',
+    liveNavBtn: '▶ Start Live Moving Navigation',
+    startLabel: 'Start:',
+    endLabel: 'Destination:',
+    turnDirections: 'Turn-by-Turn Road Directions',
+    popularRoutesTitle: 'Popular Routes Distance:',
+    remainingDist: 'Remaining Dist',
+    remainingTime: 'Remaining Time',
+    speedBoost: 'Speed Boost',
+    straightRoad: 'Follow the main road straight ahead',
+    navLiveDriving: 'Live Car Driving',
+    navLiveBiking: 'Live Biking',
+    navLiveTrain: 'Live Train Travel',
+    quickPlaces: 'Popular Places:',
+    reroutingMsg: '⚠️ Off-route detected! Calculating new shortest route...'
+  }
+};
+
+// Format numerals according to current language
+function formatNumber(num) {
   if (num === null || num === undefined) return '';
+  if (state.lang === 'en') return num.toString();
   const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
   return num.toString().replace(/\d/g, d => bnDigits[d]);
+}
+const toBanglaNum = formatNumber;
+
+// Switch and Apply Language (Bangla <-> English)
+function applyLanguage(lang) {
+  state.lang = lang;
+  const dict = I18N[lang] || I18N.bn;
+
+  // Update text of elements with data-i18n
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) {
+      el.innerText = dict[key];
+    }
+  });
+
+  // Update placeholders with data-i18n-ph
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const key = el.getAttribute('data-i18n-ph');
+    if (dict[key]) {
+      el.placeholder = dict[key];
+    }
+  });
+
+  // Update current language label on toggle button
+  const langLabel = document.getElementById('currentLangLabel');
+  if (langLabel) {
+    langLabel.innerText = lang === 'bn' ? 'English' : 'বাংলা';
+  }
+
+  // Update document title
+  document.title = lang === 'bn' 
+    ? 'বাংলাদেশ ম্যাপ (Bangladesh Map) | সম্পূর্ণ বাংলাদেশ মানচিত্র ও রুট ক্যালকুলেটর'
+    : 'Bangladesh Map | Complete Territory Map & Shortest Route Navigation';
+
+  // If a route is calculated, refresh metrics display in active language
+  if (state.lastCalculatedDistanceKm) {
+    updateAllModeTimes(state.lastCalculatedDistanceKm);
+    const distEl = document.getElementById('resDistance');
+    if (distEl) distEl.innerText = `${formatNumber(state.lastCalculatedDistanceKm)} ${lang === 'bn' ? 'কিমি' : 'km'}`;
+  }
+}
+
+function setupLanguageSwitcher() {
+  const btn = document.getElementById('langToggleBtn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const nextLang = state.lang === 'bn' ? 'en' : 'bn';
+      localStorage.setItem('bd_map_lang', nextLang);
+      applyLanguage(nextLang);
+      showToast(nextLang === 'bn' ? 'ভাষা পরিবর্তন: বাংলা' : 'Language switched to English');
+    });
+  }
+  applyLanguage(state.lang);
 }
 
 // Initialize Leaflet Map
@@ -662,12 +807,18 @@ function handleMapClick(e) {
     return;
   }
 
+  // If Live Navigation is Active: Clicking another road simulates going off-route -> instant reroute!
+  if (state.navAnimation.active) {
+    handleOffRouteReroute(lat, lng);
+    return;
+  }
+
   // Route Selection Mode
   const routePanel = document.getElementById('routePanel');
   if (routePanel.classList.contains('active')) {
     if (!state.routePoints.start) {
       setRoutePointFromMap('start', lat, lng, `পয়েন্ট A (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
-      showToast('শুরুর স্থান নির্ধারিত হয়েছে। এবার গন্তব্য স্থানে ক্লিক করুন।');
+      showToast(state.lang === 'bn' ? 'শুরুর স্থান নির্ধারিত হয়েছে। এবার গন্তব্য স্থানে ক্লিক করুন।' : 'Start point set. Now click destination point on map.');
     } else if (!state.routePoints.end) {
       setRoutePointFromMap('end', lat, lng, `পয়েন্ট B (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
       calculateRoute();
@@ -868,13 +1019,18 @@ async function calculateRoute() {
     state.map.fitBounds(state.routePolyline.getBounds(), { padding: [60, 60] });
     renderStepsList(route.legs[0].steps);
 
-    showToast(`সর্বনিম্ন দূরত্বের সেরা রুট তৈরি হয়েছে! দূরত্ব: ${toBanglaNum(distanceKm)} কিমি`);
+    // Draw directional flow arrows along the shortest path
+    renderRouteDirectionArrows(coordinates, state.travelMode);
+
+    showToast(state.lang === 'bn' 
+      ? `সর্বনিম্ন দূরত্বের সেরা রুট তৈরি হয়েছে! দূরত্ব: ${toBanglaNum(distanceKm)} কিমি` 
+      : `Shortest route calculated! Distance: ${toBanglaNum(distanceKm)} km`);
 
   } catch (err) {
     console.error('Route error:', err);
     renderHaversineFallback(start, end);
   } finally {
-    calcBtn.innerHTML = '<i class="fa-solid fa-calculator"></i> দূরত্ব ও রুট বের করুন';
+    calcBtn.innerHTML = `<i class="fa-solid fa-diamond-turn-right"></i> <span>${state.lang === 'en' ? 'Find Shortest Route & Directions' : 'সর্বনিম্ন রুট ও দিকনির্দেশনা দেখুন'}</span>`;
     calcBtn.disabled = false;
   }
 }
@@ -882,7 +1038,7 @@ async function calculateRoute() {
 // Calculate Real-World Bangladesh Travel Time based on Distance & Mode (Car, Bike, Train)
 function calculateRealisticTravelTime(distanceKm, mode) {
   const d = parseFloat(distanceKm);
-  if (isNaN(d) || d <= 0) return { minutes: 0, text: '০ মিনিট' };
+  if (isNaN(d) || d <= 0) return { minutes: 0, text: state.lang === 'en' ? '0 mins' : '০ মিনিট' };
 
   let totalMinutes = 0;
 
@@ -919,21 +1075,22 @@ function calculateRealisticTravelTime(distanceKm, mode) {
   };
 }
 
-// Format duration minutes to Bengali text (minutes, hours, or days)
+// Format duration minutes to text (minutes, hours, or days) with bilingual support
 function formatMinutesToBangla(totalMinutes) {
+  const isEn = state.lang === 'en';
   if (totalMinutes < 60) {
-    return `${toBanglaNum(totalMinutes)} মিনিট`;
+    return isEn ? `${formatNumber(totalMinutes)} mins` : `${formatNumber(totalMinutes)} মিনিট`;
   } else if (totalMinutes < 1440) {
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
-    if (mins === 0) return `${toBanglaNum(hours)} ঘণ্টা`;
-    return `${toBanglaNum(hours)} ঘণ্টা ${toBanglaNum(mins)} মিনিট`;
+    if (mins === 0) return isEn ? `${formatNumber(hours)} hrs` : `${formatNumber(hours)} ঘণ্টা`;
+    return isEn ? `${formatNumber(hours)} hrs ${formatNumber(mins)} mins` : `${formatNumber(hours)} ঘণ্টা ${formatNumber(mins)} মিনিট`;
   } else {
     const days = Math.floor(totalMinutes / 1440);
     const remainingMins = totalMinutes % 1440;
     const hours = Math.floor(remainingMins / 60);
-    if (hours === 0) return `${toBanglaNum(days)} দিন`;
-    return `${toBanglaNum(days)} দিন ${toBanglaNum(hours)} ঘণ্টা`;
+    if (hours === 0) return isEn ? `${formatNumber(days)} days` : `${formatNumber(days)} দিন`;
+    return isEn ? `${formatNumber(days)} days ${formatNumber(hours)} hrs` : `${formatNumber(days)} দিন ${formatNumber(hours)} ঘণ্টা`;
   }
 }
 
@@ -1085,9 +1242,13 @@ function setupRouteUI() {
       state.map.removeLayer(state.routePolyline);
       state.routePolyline = null;
     }
+    if (state.routeArrowMarkers) {
+      state.routeArrowMarkers.forEach(m => state.map.removeLayer(m));
+      state.routeArrowMarkers = [];
+    }
     state.routeMarkers.forEach(m => state.map.removeLayer(m));
     state.routeMarkers = [];
-    showToast('রুট ও দূরত্ব রিসেট করা হয়েছে।');
+    showToast(state.lang === 'bn' ? 'রুট ও দূরত্ব রিসেট করা হয়েছে।' : 'Route and distances reset.');
   });
 
   calcBtn.addEventListener('click', calculateRoute);
@@ -1114,8 +1275,8 @@ function setupRouteUI() {
 
   currentLocBtn.addEventListener('click', () => {
     getUserLocation((lat, lng) => {
-      setRoutePointFromMap('start', lat, lng, 'আমার বর্তমান লোকেশন');
-      showToast('বর্তমান লোকেশন শুরুর পয়েন্ট হিসেবে সেট করা হয়েছে!');
+      setRoutePointFromMap('start', lat, lng, state.lang === 'bn' ? 'আমার বর্তমান লোকেশন' : 'My Current Location');
+      showToast(state.lang === 'bn' ? 'বর্তমান লোকেশন শুরুর পয়েন্ট হিসেবে সেট করা হয়েছে!' : 'Current location set as starting point!');
     });
   });
 
@@ -1184,6 +1345,23 @@ function setupRouteUI() {
     });
   });
 
+  // Dedicated "কোথায় যেতে চান?" (Where to go?) Button Handlers (Header & Floating)
+  const openWhereToGoPanel = () => {
+    panel.classList.add('active');
+    document.getElementById('thanaPanel')?.classList.remove('active');
+    document.getElementById('mobileRouteBtn')?.classList.add('active');
+    setTimeout(() => {
+      const sInput = document.getElementById('startInput');
+      if (sInput) {
+        sInput.focus();
+        sInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+  };
+
+  document.getElementById('whereToGoBtn')?.addEventListener('click', openWhereToGoPanel);
+  document.getElementById('floatingWhereToGoBtn')?.addEventListener('click', openWhereToGoPanel);
+
   // Live Navigation Simulation Control Event Listeners
   const startLiveNavBtn = document.getElementById('startLiveNavBtn');
   if (startLiveNavBtn) {
@@ -1205,6 +1383,19 @@ function setupRouteUI() {
     speedNavBtn.addEventListener('click', cycleNavSpeedMultiplier);
   }
 
+  // Reroute Button in Live Navigation HUD
+  const rerouteNavBtn = document.getElementById('rerouteNavBtn');
+  if (rerouteNavBtn) {
+    rerouteNavBtn.addEventListener('click', () => {
+      if (state.navAnimation.active && state.navAnimation.coordinates.length > 0) {
+        const curr = state.navAnimation.coordinates[state.navAnimation.currentIndex || 0];
+        handleOffRouteReroute(curr[0], curr[1]);
+      } else {
+        showToast(state.lang === 'bn' ? 'নেভিগেশন চলাকালে অন্য রাস্তায় গেলে রিরুট সক্রিয় হবে' : 'Reroute activates when deviating from route during navigation');
+      }
+    });
+  }
+
   // Enable Live Autocomplete Dropdown for Point A and Point B
   setupWaypointAutocomplete('startInput', 'startSuggestions', 'start');
   setupWaypointAutocomplete('endInput', 'endSuggestions', 'end');
@@ -1223,22 +1414,154 @@ function getHeadingAngle(lat1, lon1, lat2, lon2) {
   return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
 
-// Create Custom Vehicle Marker on Map with Radar Halo
+// Render Directional Flow Arrows Along Route Polyline
+function renderRouteDirectionArrows(coordinates, mode = 'driving') {
+  if (state.routeArrowMarkers) {
+    state.routeArrowMarkers.forEach(m => state.map.removeLayer(m));
+  }
+  state.routeArrowMarkers = [];
+
+  if (!coordinates || coordinates.length < 4) return;
+
+  let arrowClass = 'flow-arrow-car';
+  if (mode === 'bike') arrowClass = 'flow-arrow-bike';
+  else if (mode === 'train') arrowClass = 'flow-arrow-train';
+
+  const totalPts = coordinates.length;
+  // Distribute 8 to 22 arrows along the route based on length
+  const numArrows = Math.min(22, Math.max(6, Math.floor(totalPts / 18)));
+  const step = Math.max(4, Math.floor(totalPts / numArrows));
+
+  for (let i = step; i < totalPts - 2; i += step) {
+    const p1 = coordinates[i];
+    const p2 = coordinates[i + 1];
+    const angle = getHeadingAngle(p1[0], p1[1], p2[0], p2[1]);
+
+    const icon = L.divIcon({
+      className: `route-flow-arrow ${arrowClass}`,
+      html: `
+        <div class="route-flow-arrow-inner" style="transform: rotate(${angle}deg);">
+          <i class="fa-solid fa-chevron-up"></i>
+        </div>
+      `,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+
+    const arrowMarker = L.marker([p1[0], p1[1]], { icon, interactive: false, zIndexOffset: 300 }).addTo(state.map);
+    state.routeArrowMarkers.push(arrowMarker);
+  }
+}
+
+// Dynamic Off-Route Automatic Recalculation (অন্য রাস্তায় গেলে রিরুট)
+async function handleOffRouteReroute(newLat, newLng) {
+  if (!state.routePoints.end) return;
+
+  const rerouteBar = document.getElementById('navRerouteBar');
+  if (rerouteBar) rerouteBar.style.display = 'flex';
+
+  showToast(state.lang === 'bn' 
+    ? '⚠️ রুট পরিবর্তন শনাক্ত! নতুন শর্টেস্ট রুট হিসাব হচ্ছে...' 
+    : '⚠️ Off-route detected! Calculating new shortest route...');
+
+  // Set new starting point to current position
+  state.routePoints.start = {
+    lat: newLat,
+    lng: newLng,
+    name: state.lang === 'bn' ? 'বর্তমান অবস্থান (রিরুট)' : 'Current Position (Reroute)'
+  };
+  const startInput = document.getElementById('startInput');
+  if (startInput) startInput.value = state.routePoints.start.name;
+
+  try {
+    const end = state.routePoints.end;
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${newLng},${newLat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
+    
+    const res = await fetch(osrmUrl);
+    const data = await res.json();
+
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const distanceKm = (route.distance / 1000).toFixed(1);
+      const newCoords = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+      state.navAnimation.coordinates = newCoords;
+      state.navAnimation.steps = route.legs[0].steps || [];
+      state.navAnimation.totalDistanceKm = parseFloat(distanceKm);
+      state.navAnimation.currentIndex = 0;
+
+      // Update Polyline
+      if (state.routePolyline) state.map.removeLayer(state.routePolyline);
+
+      let routeColor = '#059669';
+      let dashPattern = null;
+      if (state.travelMode === 'bike') routeColor = '#f59e0b';
+      else if (state.travelMode === 'train') {
+        routeColor = '#0284c7';
+        dashPattern = '12, 6';
+      }
+
+      state.routePolyline = L.polyline(newCoords, {
+        color: routeColor,
+        weight: 6,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+        dashArray: dashPattern
+      }).addTo(state.map);
+
+      // Redraw directional flow arrows along new path
+      renderRouteDirectionArrows(newCoords, state.travelMode);
+
+      // Update travel times
+      updateAllModeTimes(distanceKm);
+
+      // Update vehicle marker position
+      if (newCoords.length > 1) {
+        const nextPt = newCoords[1];
+        const heading = getHeadingAngle(newCoords[0][0], newCoords[0][1], nextPt[0], nextPt[1]);
+        updateLiveVehicleMarker(newCoords[0][0], newCoords[0][1], state.travelMode, heading);
+      }
+
+      state.map.panTo([newLat, newLng], { animate: true, duration: 0.5 });
+
+      showToast(state.lang === 'bn' 
+        ? `✅ নতুন শর্টেস্ট রুট কার্যকর হয়েছে! দূরত্ব: ${toBanglaNum(distanceKm)} কিমি` 
+        : `✅ New shortest route active! Distance: ${toBanglaNum(distanceKm)} km`);
+    }
+  } catch (err) {
+    console.warn('Reroute error:', err);
+  } finally {
+    setTimeout(() => {
+      if (rerouteBar) rerouteBar.style.display = 'none';
+    }, 2200);
+  }
+}
+
+// Create Custom Vehicle Marker on Map with Radar Halo & Directional Navigation Arrow
 function createLiveVehicleMarker(lat, lng, mode, heading = 0) {
   let modeClass = 'vehicle-car';
   let iconHtml = '<i class="fa-solid fa-car"></i>';
+  let arrowStroke = '#059669';
   if (mode === 'bike') {
     modeClass = 'vehicle-bike';
     iconHtml = '<i class="fa-solid fa-motorcycle"></i>';
+    arrowStroke = '#f59e0b';
   } else if (mode === 'train') {
     modeClass = 'vehicle-train';
     iconHtml = '<i class="fa-solid fa-train-subway"></i>';
+    arrowStroke = '#0284c7';
   }
 
   const divIcon = L.divIcon({
     className: `live-vehicle-marker ${modeClass}`,
     html: `
       <div class="live-vehicle-halo"></div>
+      <div class="live-nav-arrow-pointer" style="transform: rotate(${heading}deg);">
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <polygon points="12,2 22,22 12,17 2,22" fill="#ffffff" stroke="${arrowStroke}" stroke-width="1.8" />
+        </svg>
+      </div>
       <div class="live-vehicle-core" style="transform: rotate(${heading}deg);">
         ${iconHtml}
       </div>
@@ -1261,18 +1584,26 @@ function updateLiveVehicleMarker(lat, lng, mode, heading = 0) {
 
   let modeClass = 'vehicle-car';
   let iconHtml = '<i class="fa-solid fa-car"></i>';
+  let arrowStroke = '#059669';
   if (mode === 'bike') {
     modeClass = 'vehicle-bike';
     iconHtml = '<i class="fa-solid fa-motorcycle"></i>';
+    arrowStroke = '#f59e0b';
   } else if (mode === 'train') {
     modeClass = 'vehicle-train';
     iconHtml = '<i class="fa-solid fa-train-subway"></i>';
+    arrowStroke = '#0284c7';
   }
 
   const icon = L.divIcon({
     className: `live-vehicle-marker ${modeClass}`,
     html: `
       <div class="live-vehicle-halo"></div>
+      <div class="live-nav-arrow-pointer" style="transform: rotate(${heading}deg);">
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <polygon points="12,2 22,22 12,17 2,22" fill="#ffffff" stroke="${arrowStroke}" stroke-width="1.8" />
+        </svg>
+      </div>
       <div class="live-vehicle-core" style="transform: rotate(${heading}deg);">
         ${iconHtml}
       </div>
@@ -2179,6 +2510,7 @@ function setupMobileNav() {
 
 // Application Initialization
 window.addEventListener('DOMContentLoaded', () => {
+  setupLanguageSwitcher();
   initMap();
   setupLayerSwitcher();
   setupThanaDirectory();

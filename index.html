@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -35,8 +35,8 @@
         <i class="fa-solid fa-map-location-dot"></i>
       </div>
       <div class="brand-text">
-        <h1>বাংলাদেশ ম্যাপ <span>(Bangladesh Map)</span></h1>
-        <p class="tagline">শুধুমাত্র বাংলাদেশ • সকল থানা, গ্রাম, নদী ও সড়কপথ</p>
+        <h1><span data-i18n="appTitle">বাংলাদেশ ম্যাপ</span> <span class="sub-title" data-i18n="appSubtitle">(Bangladesh Map)</span></h1>
+        <p class="tagline" data-i18n="tagline">শুধুমাত্র বাংলাদেশ • সকল থানা, গ্রাম, নদী ও সড়কপথ</p>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     <div class="search-container">
       <div class="search-box">
         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-        <input type="text" id="searchInput" placeholder="যেকোনো থানা, গ্রাম, নদী বা স্থান সার্চ করুন (যেমন: আগৈলঝাড়া, রূপসা, টেকনাফ)..." autocomplete="off">
+        <input type="text" id="searchInput" data-i18n-ph="searchPlaceholder" placeholder="যেকোনো থানা, গ্রাম, নদী বা স্থান সার্চ করুন (যেমন: আগৈলঝাড়া, রূপসা, টেকনাফ)..." autocomplete="off">
         <button id="clearSearchBtn" class="clear-btn" style="display: none;"><i class="fa-solid fa-xmark"></i></button>
         <button id="searchBtn" class="search-action-btn"><i class="fa-solid fa-arrow-right"></i></button>
       </div>
@@ -53,21 +53,34 @@
 
     <!-- Header Actions -->
     <div class="header-actions">
+      <!-- Language Switcher: Bangla / English -->
+      <button id="langToggleBtn" class="lang-toggle-btn" title="ভাষা পরিবর্তন / Switch Language">
+        <i class="fa-solid fa-globe"></i>
+        <span id="currentLangLabel">English</span>
+      </button>
+
+      <!-- Prominent "কোথায় যেতে চান?" Button -->
+      <button id="whereToGoBtn" class="action-btn journey-btn pulse-glow" title="কোথায় যেতে চান? (Where to go?)">
+        <span class="btn-live-dot"></span>
+        <i class="fa-solid fa-route"></i>
+        <span data-i18n="whereToGo">কোথায় যেতে চান?</span>
+      </button>
+
       <button id="thanaDirectoryToggleBtn" class="action-btn" title="সকল জেলা ও থানার তালিকা">
         <i class="fa-solid fa-sitemap"></i>
-        <span>থানা ও জেলা</span>
+        <span data-i18n="thanaDistrict">থানা ও জেলা</span>
       </button>
       <button id="riversToggleBtn" class="action-btn" title="প্রধান নদ-নদী হাইলাইট">
         <i class="fa-solid fa-water"></i>
-        <span>নদ-নদী</span>
+        <span data-i18n="rivers">নদ-নদী</span>
       </button>
       <button id="routeModeToggleBtn" class="action-btn highlight" title="দূরত্ব ও রুট নির্ণয়">
         <i class="fa-solid fa-diamond-turn-right"></i>
-        <span>রুট ও দূরত্ব</span>
+        <span data-i18n="routeDist">রুট ও দূরত্ব</span>
       </button>
       <button id="measureToolBtn" class="action-btn" title="ফিতা টুল (সরলরেখা দূরত্ব মাপুন)">
         <i class="fa-solid fa-ruler-combined"></i>
-        <span>পরিমাপক</span>
+        <span data-i18n="ruler">পরিমাপক</span>
       </button>
       <button id="locateMeBtn" class="action-btn icon-only" title="আমার বর্তমান অবস্থান">
         <i class="fa-solid fa-crosshairs"></i>
@@ -173,7 +186,7 @@
       <div class="panel-header">
         <div class="panel-title">
           <i class="fa-solid fa-route"></i>
-          <h3>দূরত্ব ও রুট ক্যালকুলেটর</h3>
+          <h3 data-i18n="routePanelTitle">কোথায় যেতে চান? (রুট প্ল্যানার)</h3>
         </div>
         <button class="close-panel-btn" id="closeRoutePanelBtn">
           <i class="fa-solid fa-xmark"></i>
@@ -183,17 +196,17 @@
       <div class="panel-body">
         <!-- Travel Mode Selector: Car, Bike, Train -->
         <div class="travel-modes">
-          <button class="mode-btn active" data-mode="driving" title="গাড়ি / কার">
+          <button class="mode-btn active" data-mode="driving" title="গাড়ি / Car">
             <i class="fa-solid fa-car"></i>
-            <span>গাড়ি (Car)</span>
+            <span data-i18n="car">গাড়ি (Car)</span>
           </button>
-          <button class="mode-btn" data-mode="bike" title="মোটরসাইকেল">
+          <button class="mode-btn" data-mode="bike" title="মোটরসাইকেল / Bike">
             <i class="fa-solid fa-motorcycle"></i>
-            <span>বাইক (Bike)</span>
+            <span data-i18n="bike">বাইক (Bike)</span>
           </button>
-          <button class="mode-btn" data-mode="train" title="রেলপথ / ট্রেন">
+          <button class="mode-btn" data-mode="train" title="রেলপথ / Train">
             <i class="fa-solid fa-train-subway"></i>
-            <span>ট্রেন (Train)</span>
+            <span data-i18n="train">ট্রেন (Train)</span>
           </button>
         </div>
 
@@ -202,7 +215,7 @@
           <div class="input-row">
             <div class="point-badge start-badge">A</div>
             <div class="input-wrapper" id="startInputWrapper">
-              <input type="text" id="startInput" placeholder="শুরুর স্থান লিখুন বা ম্যাপে ক্লিক করুন..." autocomplete="off">
+              <input type="text" id="startInput" data-i18n-ph="startPlaceholder" placeholder="যাত্রা শুরুর স্থান লিখুন (Start Journey)..." autocomplete="off">
               <button class="input-helper-btn" id="useCurrentLocationStart" title="বর্তমান লোকেশন ব্যবহার করুন">
                 <i class="fa-solid fa-crosshairs"></i>
               </button>
@@ -217,23 +230,23 @@
           <div class="input-row">
             <div class="point-badge end-badge">B</div>
             <div class="input-wrapper" id="endInputWrapper">
-              <input type="text" id="endInput" placeholder="গন্তব্যের স্থান লিখুন বা ম্যাপে ক্লিক করুন..." autocomplete="off">
+              <input type="text" id="endInput" data-i18n-ph="endPlaceholder" placeholder="গন্তব্যের স্থান লিখুন (Destination Journey)..." autocomplete="off">
               <div id="endSuggestions" class="route-autocomplete-dropdown"></div>
             </div>
           </div>
         </div>
 
         <div class="click-map-tip">
-          <i class="fa-regular fa-lightbulb"></i> টিপ: ম্যাপের যেকোনো দুটি স্থানে সরাসরি ক্লিক করেও রুট বের করতে পারেন!
+          <i class="fa-regular fa-lightbulb"></i> <span data-i18n="mapClickTip">টিপ: ম্যাপের যেকোনো দুটি স্থানে সরাসরি ক্লিক করেও রুট বের করতে পারেন!</span>
         </div>
 
         <!-- Action Buttons -->
         <div class="route-actions">
           <button id="calculateRouteBtn" class="btn primary-btn">
-            <i class="fa-solid fa-calculator"></i> দূরত্ব ও রুট বের করুন
+            <i class="fa-solid fa-diamond-turn-right"></i> <span data-i18n="calcRouteBtn">সর্বনিম্ন রুট ও দিকনির্দেশনা দেখুন</span>
           </button>
           <button id="clearRouteBtn" class="btn secondary-btn">
-            <i class="fa-solid fa-trash-can"></i> রুট মুছুন
+            <i class="fa-solid fa-trash-can"></i> <span data-i18n="clearRouteBtn">রুট মুছুন</span>
           </button>
         </div>
 
@@ -241,12 +254,12 @@
         <div class="route-results-card" id="routeResultsCard" style="display: none;">
           <div class="results-summary">
             <div class="metric-box">
-              <span class="metric-label">সর্বনিম্ন সড়ক দূরত্ব (Shortest)</span>
+              <span class="metric-label" data-i18n="shortestDist">সর্বনিম্ন সড়ক দূরত্ব (Shortest)</span>
               <span class="metric-value" id="resDistance">০ কিমি</span>
             </div>
             <div class="metric-divider"></div>
             <div class="metric-box">
-              <span class="metric-label" id="resTimeLabel">আনুমানিক সময় (Est. Time)</span>
+              <span class="metric-label" id="resTimeLabel" data-i18n="estTime">আনুমানিক সময় (Est. Time)</span>
               <span class="metric-value highlight" id="resTime">০ মিনিট</span>
             </div>
           </div>
@@ -256,21 +269,21 @@
             <div class="mode-time-chip active" id="chipDriving" data-mode="driving" title="গাড়িতে সময়">
               <i class="fa-solid fa-car"></i>
               <div class="time-chip-text">
-                <span class="chip-label">গাড়ি (Car)</span>
+                <span class="chip-label" data-i18n="car">গাড়ি (Car)</span>
                 <span class="chip-val" id="timeCar">০ মিনিট</span>
               </div>
             </div>
             <div class="mode-time-chip" id="chipBike" data-mode="bike" title="বাইকে সময়">
               <i class="fa-solid fa-motorcycle"></i>
               <div class="time-chip-text">
-                <span class="chip-label">বাইক (Bike)</span>
+                <span class="chip-label" data-i18n="bike">বাইক (Bike)</span>
                 <span class="chip-val" id="timeBike">০ মিনিট</span>
               </div>
             </div>
             <div class="mode-time-chip" id="chipTrain" data-mode="train" title="ট্রেনে সময়">
               <i class="fa-solid fa-train-subway"></i>
               <div class="time-chip-text">
-                <span class="chip-label">ট্রেন (Train)</span>
+                <span class="chip-label" data-i18n="train">ট্রেন (Train)</span>
                 <span class="chip-val" id="timeTrain">০ মিনিট</span>
               </div>
             </div>
@@ -281,19 +294,19 @@
             <button id="startLiveNavBtn" class="btn live-nav-trigger-btn">
               <span class="nav-btn-pulse"></span>
               <i class="fa-solid fa-circle-play"></i>
-              <span>▶ লাইভ নেভিগেশন সিমুলেশন (চলুন)</span>
+              <span data-i18n="liveNavBtn">▶ লাইভ নেভিগেশন সিমুলেশন (চলুন)</span>
             </button>
           </div>
 
           <div class="route-summary-info">
             <div class="info-row">
               <i class="fa-solid fa-circle-dot text-green"></i>
-              <span class="route-label">শুরু:</span>
+              <span class="route-label" data-i18n="startLabel">শুরু:</span>
               <span class="route-name" id="resStartName">-</span>
             </div>
             <div class="info-row">
               <i class="fa-solid fa-location-dot text-red"></i>
-              <span class="route-label">গন্তব্য:</span>
+              <span class="route-label" data-i18n="endLabel">গন্তব্য:</span>
               <span class="route-name" id="resEndName">-</span>
             </div>
           </div>
@@ -301,7 +314,7 @@
           <!-- Turn by Turn directions -->
           <div class="turn-by-turn-section">
             <button class="accordion-toggle" id="toggleStepsBtn">
-              <span><i class="fa-solid fa-diamond-turn-right"></i> টার্ন-বাই-টার্ন সড়ক ডিরেকশন</span>
+              <span><i class="fa-solid fa-diamond-turn-right"></i> <span data-i18n="turnDirections">টার্ন-বাই-টার্ন সড়ক ডিরেকশন</span></span>
               <i class="fa-solid fa-chevron-down toggle-icon"></i>
             </button>
             <div class="steps-list" id="stepsList" style="display: none;"></div>
@@ -310,7 +323,7 @@
 
         <!-- Popular City-to-City Distance Quick Links -->
         <div class="popular-routes-section">
-          <h4><i class="fa-solid fa-fire"></i> জনপ্রিয় রুটসমূহের দূরত্ব:</h4>
+          <h4><i class="fa-solid fa-fire"></i> <span data-i18n="popularRoutesTitle">জনপ্রিয় রুটসমূহের দূরত্ব:</span></h4>
           <div class="popular-routes-grid">
             <button class="pop-route-chip" data-from="ঢাকা" data-to="চট্টগ্রাম">ঢাকা ➔ চট্টগ্রাম</button>
             <button class="pop-route-chip" data-from="ঢাকা" data-to="সিলেট">ঢাকা ➔ সিলেট</button>
@@ -339,9 +352,16 @@
       <span>শুধুমাত্র বাংলাদেশ অঞ্চল সক্রিয়</span>
     </div>
 
+    <!-- Floating Prominent "কোথায় যেতে চান?" Quick Action Button -->
+    <button class="floating-where-to-go-btn" id="floatingWhereToGoBtn" title="কোথায় যেতে চান? / Where to go?">
+      <span class="btn-ripple-wave"></span>
+      <i class="fa-solid fa-diamond-turn-right"></i>
+      <span data-i18n="whereToGo">কোথায় যেতে চান?</span>
+    </button>
+
     <!-- Quick Highlights Floating Pill -->
     <div class="quick-places-dock">
-      <span class="dock-title"><i class="fa-solid fa-star"></i> জনপ্রিয় স্থান:</span>
+      <span class="dock-title"><i class="fa-solid fa-star"></i> <span data-i18n="quickPlaces">জনপ্রিয় স্থান:</span></span>
       <div class="dock-scroll">
         <button class="place-badge" data-lat="21.4272" data-lng="91.9858" data-name="কক্সবাজার সমুদ্র সৈকত">কক্সবাজার</button>
         <button class="place-badge" data-lat="23.7104" data-lng="90.4074" data-name="লালবাগ কেল্লা, ঢাকা">লালবাগ কেল্লা</button>
@@ -356,11 +376,17 @@
 
     <!-- Floating Live Turn-by-Turn Moving Navigation Simulation HUD -->
     <div class="live-nav-hud" id="liveNavHud" style="display: none;">
+      <!-- Off-Route Recalculation Alert Banner -->
+      <div class="nav-reroute-bar" id="navRerouteBar" style="display: none;">
+        <i class="fa-solid fa-arrows-rotate fa-spin"></i>
+        <span data-i18n="reroutingMsg">⚠️ রুট পরিবর্তন শনাক্ত! নতুন শর্টেস্ট রুট হিসাব হচ্ছে...</span>
+      </div>
+
       <div class="live-nav-header">
         <div class="nav-vehicle-pill">
           <span class="pulse-radar"></span>
           <i id="navVehicleIcon" class="fa-solid fa-car text-emerald"></i>
-          <span id="navVehicleText">লাইভ ড্রাইভিং</span>
+          <span id="navVehicleText" data-i18n="navLiveDriving">লাইভ ড্রাইভিং</span>
         </div>
         <div class="nav-speed-pill">
           <i class="fa-solid fa-gauge-high"></i>
@@ -376,27 +402,28 @@
           <i id="navTurnIcon" class="fa-solid fa-diamond-turn-right"></i>
         </div>
         <div class="turn-text-wrap">
-          <div id="navInstruction" class="nav-title-txt">সোজা প্রধান সড়ক অনুসরণ করুন</div>
+          <div id="navInstruction" class="nav-title-txt" data-i18n="straightRoad">সোজা প্রধান সড়ক অনুসরণ করুন</div>
           <div id="navNextTurnDist" class="nav-dist-txt">পরবর্তী মোড়: ২৫০ মিটার</div>
         </div>
       </div>
 
       <div class="live-nav-metrics-row">
         <div class="nav-metric-unit">
-          <span class="m-lbl">বাকি দূরত্ব</span>
+          <span class="m-lbl" data-i18n="remainingDist">বাকি দূরত্ব</span>
           <span class="m-val" id="navRemainingDist">০ কিমি</span>
         </div>
         <div class="m-sep"></div>
         <div class="nav-metric-unit">
-          <span class="m-lbl">বাকি সময়</span>
+          <span class="m-lbl" data-i18n="remainingTime">বাকি সময়</span>
           <span class="m-val highlight" id="navRemainingTime">০ মিনিট</span>
         </div>
         <div class="m-sep"></div>
         <div class="nav-metric-unit">
-          <span class="m-lbl">স্পিড বুস্ট</span>
+          <span class="m-lbl" data-i18n="speedBoost">স্পিড বুস্ট</span>
           <div class="nav-ctrls">
             <button id="pauseNavBtn" class="nav-btn-icon" title="বিরতি / চালু"><i class="fa-solid fa-pause"></i></button>
             <button id="speedNavBtn" class="nav-btn-speed" title="সিমুলেশন স্পিড পরিবর্তন">1x</button>
+            <button id="rerouteNavBtn" class="nav-btn-icon nav-btn-reroute" title="অন্য রাস্তায় গেলে রিরুট করুন (Reroute)"><i class="fa-solid fa-arrows-rotate"></i></button>
           </div>
         </div>
       </div>
@@ -404,25 +431,25 @@
 
     <!-- Mobile Bottom Navigation Bar (Thumb-friendly mobile/tab control) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
-      <button class="mobile-nav-btn active-route" id="mobileRouteBtn" title="রুট ও দূরত্ব">
+      <button class="mobile-nav-btn active-route" id="mobileRouteBtn" title="কোথায় যাবেন? (রুট)">
         <i class="fa-solid fa-diamond-turn-right"></i>
-        <span>রুট ও দূরত্ব</span>
+        <span data-i18n="mobileWhereToGo">কোথায় যাবেন?</span>
       </button>
       <button class="mobile-nav-btn" id="mobileThanaBtn" title="থানা ও জেলা ডিরেক্টরি">
         <i class="fa-solid fa-sitemap"></i>
-        <span>থানা-জেলা</span>
+        <span data-i18n="thanaDistrict">থানা-জেলা</span>
       </button>
       <button class="mobile-nav-btn" id="mobileRiversBtn" title="নদ-নদী লেয়ার">
         <i class="fa-solid fa-water"></i>
-        <span>নদ-নদী</span>
+        <span data-i18n="rivers">নদ-নদী</span>
       </button>
       <button class="mobile-nav-btn" id="mobileLayersBtn" title="ম্যাপ লেয়ার">
         <i class="fa-solid fa-layer-group"></i>
-        <span>লেয়ার</span>
+        <span data-i18n="mapLayers">লেয়ার</span>
       </button>
       <button class="mobile-nav-btn" id="mobileLocateBtn" title="আমার লোকেশন">
         <i class="fa-solid fa-crosshairs"></i>
-        <span>অবস্থান</span>
+        <span data-i18n="myLocation">অবস্থান</span>
       </button>
     </nav>
   </main>
@@ -437,6 +464,6 @@
   <script src="bd_data.js?v=5"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
