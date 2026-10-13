@@ -63,7 +63,8 @@ const state = {
     active: false,
     district: null,
     markers: [],
-    boundaryLayer: null
+    boundaryLayer: null,
+    maskLayer: null
   }
 };
 
@@ -2904,6 +2905,27 @@ function populateDistrictSwitchDropdown() {
   });
 }
 
+// Build inverted dark mask so only this district shines bright
+function makeDistrictInvertedMask(feat) {
+  if (!feat || !feat.geometry) return null;
+  const worldOuter = [
+    [-90, -180],
+    [-90, 180],
+    [90, 180],
+    [90, -180],
+    [-90, -180]
+  ];
+  const geom = feat.geometry;
+  if (geom.type === 'Polygon') {
+    const hole = geom.coordinates[0].map(c => [c[1], c[0]]);
+    return [worldOuter, hole];
+  } else if (geom.type === 'MultiPolygon') {
+    const holes = geom.coordinates.map(poly => poly[0].map(c => [c[1], c[0]]));
+    return [worldOuter, ...holes];
+  }
+  return null;
+}
+
 function activateSingleDistrictMode(district) {
   if (!district || !state.map) return;
 
@@ -2915,7 +2937,7 @@ function activateSingleDistrictMode(district) {
   state.districtFocus.active = true;
   state.districtFocus.district = district;
 
-  // Clear previous district markers & halos
+  // Clear previous district markers, boundary layer, and mask layer
   if (state.districtFocus.markers && state.districtFocus.markers.length > 0) {
     state.districtFocus.markers.forEach(m => state.map.removeLayer(m));
     state.districtFocus.markers = [];
@@ -2924,30 +2946,73 @@ function activateSingleDistrictMode(district) {
     try { state.map.removeLayer(state.districtFocus.boundaryLayer); } catch(e){}
     state.districtFocus.boundaryLayer = null;
   }
+  if (state.districtFocus.maskLayer) {
+    try { state.map.removeLayer(state.districtFocus.maskLayer); } catch(e){}
+    state.districtFocus.maskLayer = null;
+  }
 
-  // Strict District Bounding Box: Lock camera strictly inside this district!
-  const padLat = 0.22;
-  const padLng = 0.28;
-  const districtBounds = [
-    [district.lat - padLat, district.lng - padLng],
-    [district.lat + padLat, district.lng + padLng]
-  ];
+  // Hide general countrywide marker cluster if visible so ONLY this district's markers show
+  if (state.markerCluster && state.map.hasLayer(state.markerCluster)) {
+    state.map.removeLayer(state.markerCluster);
+  }
 
-  // Restrict camera to this district only
-  state.map.fitBounds(districtBounds, { padding: [35, 35], maxZoom: 12 });
-  state.map.setMinZoom(9.5);
-  state.map.setMaxBounds(districtBounds);
+  // Look up Authentic 64-District GeoJSON Feature
+  const boundariesDb = (typeof BD_DISTRICT_BOUNDARIES !== 'undefined') ? BD_DISTRICT_BOUNDARIES : (window.BD_DISTRICT_BOUNDARIES || {});
+  const feat = boundariesDb[district.name] || boundariesDb[(district.en || '').toLowerCase()];
 
-  // Draw glowing emerald territorial ring around the district
-  state.districtFocus.boundaryLayer = L.circle([district.lat, district.lng], {
-    radius: 26000, // ~26 km radius
-    color: '#059669',
-    weight: 3.5,
-    dashArray: '8, 8',
-    fillColor: '#10b981',
-    fillOpacity: 0.04,
-    interactive: false
-  }).addTo(state.map);
+  let districtBounds;
+  if (feat) {
+    // 1. Inverted Mask: Softly dims everything outside this district so ONLY this district is highlighted!
+    const maskCoords = makeDistrictInvertedMask(feat);
+    if (maskCoords) {
+      state.districtFocus.maskLayer = L.polygon(maskCoords, {
+        stroke: false,
+        fillColor: '#090d16',
+        fillOpacity: 0.48,
+        interactive: false
+      }).addTo(state.map);
+    }
+
+    // 2. Authentic Geographic Polygon/MultiPolygon Boundary Outline
+    state.districtFocus.boundaryLayer = L.geoJSON(feat, {
+      style: {
+        color: '#059669',
+        weight: 3.5,
+        opacity: 1,
+        dashArray: '6, 6',
+        fillColor: '#10b981',
+        fillOpacity: 0.08,
+        interactive: false
+      }
+    }).addTo(state.map);
+
+    districtBounds = state.districtFocus.boundaryLayer.getBounds();
+  } else {
+    // Fallback if boundary dataset not yet loaded
+    const padLat = 0.22;
+    const padLng = 0.28;
+    districtBounds = L.latLngBounds(
+      [district.lat - padLat, district.lng - padLng],
+      [district.lat + padLat, district.lng + padLng]
+    );
+  }
+
+  // Restrict camera to this district only with device-optimized padding & zoom
+  const isMobile = window.innerWidth <= 768;
+  state.map.invalidateSize();
+  if (isMobile) {
+    state.map.fitBounds(districtBounds, { padding: [18, 18], maxZoom: 11.5 });
+    state.map.setMinZoom(7);
+    state.map.setMaxBounds(districtBounds.pad(0.55));
+  } else {
+    state.map.fitBounds(districtBounds, {
+      paddingTopLeft: [440, 25],
+      paddingBottomRight: [25, 25],
+      maxZoom: 12
+    });
+    state.map.setMinZoom(8);
+    state.map.setMaxBounds(districtBounds.pad(0.4));
+  }
 
   // Plot custom interactive markers for each thana of this district
   const thanasGridContainer = document.getElementById('singleDistrictThanasList');
@@ -3006,6 +3071,19 @@ function activateSingleDistrictMode(district) {
       btn.addEventListener('click', () => {
         state.map.flyTo([thanaLat, thanaLng], 14.5, { duration: 1.2 });
         marker.openPopup();
+        // On mobile, collapse drawer back to peek when user selects a thana so they can see the map!
+        if (window.innerWidth <= 768) {
+          const sidebar = document.getElementById('singleDistrictSidebar');
+          if (sidebar) {
+            sidebar.classList.remove('mobile-expanded');
+            const icon = document.getElementById('drawerToggleIcon');
+            const txt = document.getElementById('drawerToggleText');
+            if (icon && txt) {
+              icon.className = 'fa-solid fa-chevron-up';
+              txt.innerText = 'বিস্তারিত';
+            }
+          }
+        }
       });
       thanasGridContainer.appendChild(btn);
     }
@@ -3040,9 +3118,22 @@ function activateSingleDistrictMode(district) {
   const quickSelect = document.getElementById('quickDistrictSelect');
   if (quickSelect) quickSelect.value = district.name;
 
-  // Show Sidebar
+  // Show Sidebar: on mobile, ensure it starts in peek mode (NOT covering the map!)
   const sidebar = document.getElementById('singleDistrictSidebar');
-  if (sidebar) sidebar.classList.add('active');
+  if (sidebar) {
+    sidebar.classList.remove('mobile-expanded');
+    sidebar.classList.add('active');
+    const icon = document.getElementById('drawerToggleIcon');
+    const txt = document.getElementById('drawerToggleText');
+    if (icon && txt) {
+      icon.className = 'fa-solid fa-chevron-up';
+      txt.innerText = 'বিস্তারিত';
+    }
+  }
+
+  // Highlight mobile bottom nav district button
+  const mDistBtn = document.getElementById('mobileDistrictBtn');
+  if (mDistBtn) mDistBtn.classList.add('active');
 
   // Show Floating Status Pill
   const pill = document.getElementById('districtModeFloatingPill');
@@ -3052,7 +3143,12 @@ function activateSingleDistrictMode(district) {
     pill.style.display = 'flex';
   }
 
-  showToast(`${district.name} জেলার একক ম্যাপ ও পূর্ণাঙ্গ বিবরণ সক্রিয় করা হয়েছে।`);
+  // Refresh Leaflet size on mobile
+  setTimeout(() => {
+    state.map.invalidateSize();
+  }, 250);
+
+  showToast(`${district.name} জেলার একক ভৌগোলিক মানচিত্র সক্রিয় করা হয়েছে।`);
 }
 
 function exitSingleDistrictMode() {
@@ -3061,7 +3157,7 @@ function exitSingleDistrictMode() {
   state.districtFocus.active = false;
   state.districtFocus.district = null;
 
-  // Clear markers & boundary layer
+  // Clear markers, boundary layer, and mask layer
   if (state.districtFocus.markers && state.districtFocus.markers.length > 0) {
     state.districtFocus.markers.forEach(m => state.map.removeLayer(m));
     state.districtFocus.markers = [];
@@ -3069,6 +3165,15 @@ function exitSingleDistrictMode() {
   if (state.districtFocus.boundaryLayer) {
     try { state.map.removeLayer(state.districtFocus.boundaryLayer); } catch(e){}
     state.districtFocus.boundaryLayer = null;
+  }
+  if (state.districtFocus.maskLayer) {
+    try { state.map.removeLayer(state.districtFocus.maskLayer); } catch(e){}
+    state.districtFocus.maskLayer = null;
+  }
+
+  // Restore countrywide marker cluster
+  if (state.markerCluster && !state.map.hasLayer(state.markerCluster)) {
+    state.map.addLayer(state.markerCluster);
   }
 
   // Restore map camera to full Bangladesh
@@ -3082,10 +3187,20 @@ function exitSingleDistrictMode() {
   const quickSelect = document.getElementById('quickDistrictSelect');
   if (quickSelect) quickSelect.value = '';
 
+  // Reset mobile bottom nav district button
+  const mDistBtn = document.getElementById('mobileDistrictBtn');
+  if (mDistBtn) mDistBtn.classList.remove('active');
+
   // Hide sidebar & pill
-  document.getElementById('singleDistrictSidebar')?.classList.remove('active');
+  const sidebar = document.getElementById('singleDistrictSidebar');
+  if (sidebar) sidebar.classList.remove('active', 'mobile-expanded');
+
   const pill = document.getElementById('districtModeFloatingPill');
   if (pill) pill.style.display = 'none';
+
+  setTimeout(() => {
+    state.map.invalidateSize();
+  }, 250);
 
   showToast('সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যাওয়া হয়েছে।');
 }
@@ -3126,6 +3241,45 @@ function setupSingleDistrictModule() {
       if (val) {
         const d = BD_DISTRICTS.find(item => item.name === val);
         if (d) activateSingleDistrictMode(d);
+      }
+    });
+  }
+
+  // Mobile Drawer Expand/Collapse Toggle
+  const drawerToggleBtn = document.getElementById('toggleDistrictDrawerBtn');
+  const sidebarEl = document.getElementById('singleDistrictSidebar');
+  const headerEl = document.getElementById('districtSidebarHeader');
+  const dragHandleEl = document.getElementById('districtSidebarDragHandle');
+
+  function toggleMobileDistrictDrawer() {
+    if (!sidebarEl) return;
+    const isExpanded = sidebarEl.classList.toggle('mobile-expanded');
+    const icon = document.getElementById('drawerToggleIcon');
+    const txt = document.getElementById('drawerToggleText');
+    if (icon && txt) {
+      if (isExpanded) {
+        icon.className = 'fa-solid fa-chevron-down';
+        txt.innerText = 'ম্যাপ দেখুন';
+      } else {
+        icon.className = 'fa-solid fa-chevron-up';
+        txt.innerText = 'বিস্তারিত';
+      }
+    }
+  }
+
+  if (drawerToggleBtn) {
+    drawerToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMobileDistrictDrawer();
+    });
+  }
+  if (dragHandleEl) {
+    dragHandleEl.addEventListener('click', toggleMobileDistrictDrawer);
+  }
+  if (headerEl) {
+    headerEl.addEventListener('click', (e) => {
+      if (window.innerWidth <= 768 && !e.target.closest('#exitDistrictModeBtn') && !e.target.closest('#toggleDistrictDrawerBtn')) {
+        toggleMobileDistrictDrawer();
       }
     });
   }
@@ -3172,7 +3326,7 @@ function setupSingleDistrictModule() {
       if (destInput && routePanel) {
         destInput.value = `${curDist.name} সদর`;
         routePanel.classList.add('active');
-        document.getElementById('singleDistrictSidebar')?.classList.remove('active');
+        document.getElementById('singleDistrictSidebar')?.classList.remove('active', 'mobile-expanded');
         showToast(`রুট প্ল্যানারে গন্তব্য সেট করা হয়েছে: ${curDist.name} সদর`);
       }
     }

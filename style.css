@@ -2971,17 +2971,73 @@ body {
     top: auto;
     left: 0;
     right: 0;
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: 100%;
-    max-height: 65vh;
+    height: 72vh;
+    max-height: 72vh;
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
-    transform: translateY(110%);
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+    transform: translateY(115%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 850;
   }
 
+  /* Active on mobile starts in compact peek mode by default (only ~64px bottom bar showing) so MAP is 85% visible! */
   .single-district-sidebar.active {
+    transform: translateY(calc(100% - 64px));
+  }
+
+  /* When user taps "বিস্তারিত" or drags up, it smoothly expands to show all thanas and details */
+  .single-district-sidebar.active.mobile-expanded {
     transform: translateY(0);
+  }
+
+  .single-district-sidebar .sheet-drag-handle {
+    cursor: pointer;
+    margin: 8px auto 4px;
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .district-sidebar-header {
+    cursor: pointer;
+    padding: 10px 14px 12px;
+  }
+
+  .district-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-drawer-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+    padding: 5px 11px;
+    border-radius: var(--border-radius-full);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .mobile-drawer-toggle-btn:hover, .mobile-drawer-toggle-btn:active {
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(1.02);
+  }
+
+  .district-mode-floating-pill {
+    top: 8px;
+    left: 10px;
+    right: 10px;
+    font-size: 0.76rem;
+    padding: 5px 12px;
+    justify-content: space-between;
+    z-index: 840;
   }
 
   .district-modal-container {

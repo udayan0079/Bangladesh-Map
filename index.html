@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -201,8 +201,8 @@
     <!-- শুধুমাত্র নির্বাচিত জেলার বাউন্ডারির ভেতরের ম্যাপ ও পূর্ণাঙ্গ বিবরণ -->
     <!-- =================================================================== -->
     <aside class="single-district-sidebar" id="singleDistrictSidebar">
-      <div class="sheet-drag-handle"></div>
-      <div class="district-sidebar-header">
+      <div class="sheet-drag-handle" id="districtSidebarDragHandle"></div>
+      <div class="district-sidebar-header" id="districtSidebarHeader">
         <div class="district-header-main">
           <div class="district-badge-icon">
             <i class="fa-solid fa-map-location-dot"></i>
@@ -213,9 +213,15 @@
             <span class="district-en-title" id="singleDistrictEnName">Dhaka District</span>
           </div>
         </div>
-        <button class="close-district-btn" id="exitDistrictModeBtn" title="সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যান">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
+        <div class="district-header-controls">
+          <button class="mobile-drawer-toggle-btn" id="toggleDistrictDrawerBtn" title="বিস্তারিত দেখুন / ম্যাপ দেখুন">
+            <i class="fa-solid fa-chevron-up" id="drawerToggleIcon"></i>
+            <span id="drawerToggleText">বিস্তারিত</span>
+          </button>
+          <button class="close-district-btn" id="exitDistrictModeBtn" title="সম্পূর্ণ বাংলাদেশ ম্যাপে ফিরে যান">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
 
       <!-- District Switcher Select Dropdown -->
@@ -611,9 +617,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <!-- Bangladesh Comprehensive GeoJSON & Administrative Dataset -->
-  <script src="bd_data.js?v=5"></script>
+  <script src="bd_data.js?v=11"></script>
+  <script src="bd_districts_geojson.js?v=11"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
