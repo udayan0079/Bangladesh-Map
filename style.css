@@ -43,7 +43,7 @@
 body {
   font-family: 'Hind Siliguri', 'Outfit', sans-serif;
   color: var(--text-main);
-  background-color: #0b1329;
+  background-color: #f1f5f9;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -442,14 +442,30 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #0b1329;
+  background: #f1f5f9;
 }
 
 #map {
   width: 100%;
   height: 100%;
-  background: #0b1329;
+  background: #f1f5f9;
   z-index: 10;
+}
+
+/* Prevent Black/White box flicker and tear during zoom in/out */
+.leaflet-container {
+  background-color: #f1f5f9 !important;
+  outline: 0;
+}
+
+.leaflet-tile {
+  transition: opacity 0.15s ease-out;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.leaflet-tile-container {
+  will-change: transform;
 }
 
 /* Bangladesh Mask Active Status Badge */
@@ -1280,85 +1296,138 @@ body {
   50%, 100% { left: 200%; }
 }
 
-/* Floating Live Moving Navigation Simulation HUD */
-.live-nav-hud {
+/* ===================================================
+   GOOGLE MAPS STYLE REAL-TIME NAVIGATION GUIDANCE
+   Top Guidance Banner & Bottom Metrics Dock
+=================================================== */
+
+/* Top Guidance Banner: Prominent Green Navigation Header */
+.turn-guidance-banner {
   position: absolute;
-  top: 16px;
+  top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  width: 460px;
-  max-width: calc(100vw - 32px);
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: var(--border-radius-lg);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
-  padding: 14px 16px;
+  width: 94%;
+  max-width: 540px;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  box-shadow: 0 14px 35px -5px rgba(5, 150, 105, 0.45), 0 6px 15px rgba(0, 0, 0, 0.2);
   z-index: 1500;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  animation: slide-hud-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  animation: slide-guidance-down 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes slide-hud-down {
-  from { opacity: 0; transform: translate(-50%, -20px); }
+@keyframes slide-guidance-down {
+  from { opacity: 0; transform: translate(-50%, -24px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-.live-nav-header {
+.guidance-main-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.nav-vehicle-pill {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 5px 12px;
-  border-radius: var(--border-radius-full);
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #f8fafc;
+  gap: 14px;
+  padding: 12px 16px;
   position: relative;
 }
 
-.pulse-radar {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 10px #10b981;
-  animation: radar-dot 1.4s infinite alternate;
+/* Maneuver Icon Box (Left) */
+.maneuver-icon-box {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 1.6rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes radar-dot {
-  from { transform: scale(0.8); opacity: 0.6; }
-  to { transform: scale(1.3); opacity: 1; }
+/* Maneuver Text Box (Center) */
+.maneuver-text-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
-.nav-speed-pill {
+.turn-distance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.turn-dist-number {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
+  font-family: 'Outfit', 'Hind Siliguri', sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.turn-badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #facc15;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--border-radius-full);
+}
+
+.turn-instruction-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(245, 158, 11, 0.2);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  padding: 4px 10px;
-  border-radius: var(--border-radius-full);
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #fbbf24;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.nav-close-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  width: 28px;
-  height: 28px;
+.turn-action-txt {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.turn-road-divider {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+.turn-road-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #d1fae5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Exit Navigation Button */
+.guidance-exit-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   border-radius: 50%;
-  color: #94a3b8;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1366,59 +1435,46 @@ body {
   transition: all 0.2s;
 }
 
-.nav-close-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+.guidance-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.85);
+  border-color: #ef4444;
+  transform: scale(1.08);
 }
 
-/* Turn Direction Card in HUD */
-.live-nav-instruct-card {
+/* Live Navigation Bottom Dock */
+.nav-bottom-dock {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 94%;
+  max-width: 540px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
+  padding: 12px 18px;
+  z-index: 1500;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 10px 14px;
-  border-radius: 12px;
-  border-left: 3px solid #10b981;
+  flex-direction: column;
+  gap: 10px;
+  animation: slide-dock-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.turn-icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: #10b981;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
+@keyframes slide-dock-up {
+  from { opacity: 0; transform: translate(-50%, 24px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-.nav-title-txt {
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.25;
-}
-
-.nav-dist-txt {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-/* Metrics Row */
-.live-nav-metrics-row {
+.dock-metrics-wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 8px 14px;
-  border-radius: 10px;
+  gap: 10px;
 }
 
-.nav-metric-unit {
+.dock-metric-item {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1426,51 +1482,132 @@ body {
   text-align: center;
 }
 
-.m-lbl {
+.dock-m-lbl {
   font-size: 0.68rem;
   color: #94a3b8;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.m-val {
-  font-size: 1.05rem;
-  font-weight: 700;
+.dock-m-val {
+  font-size: 1.15rem;
+  font-weight: 800;
   color: #ffffff;
   font-family: 'Outfit', 'Hind Siliguri', sans-serif;
 }
 
-.m-val.highlight {
+.dock-m-val.highlight {
   color: #34d399;
 }
 
-.m-sep {
+.dock-m-divider {
   width: 1px;
   height: 28px;
   background: rgba(255, 255, 255, 0.15);
 }
 
-.nav-ctrls {
+.dock-status-pill {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 3px 8px;
+  border-radius: var(--border-radius-full);
   margin-top: 2px;
 }
 
-.nav-btn-icon, .nav-btn-speed {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
+.gps-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
-.nav-btn-icon:hover, .nav-btn-speed:hover {
-  background: rgba(255, 255, 255, 0.3);
-  color: #10b981;
+.gps-dot.stationary {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.gps-dot.moving {
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: radar-dot 1.2s infinite alternate;
+}
+
+.dock-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.dock-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+}
+
+.dock-btn.step-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+
+.dock-btn.step-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  transform: translateY(-1px);
+}
+
+.dock-btn.reroute-btn {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.dock-btn.reroute-btn:hover {
+  background: rgba(239, 68, 68, 0.4);
+  color: white;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .turn-guidance-banner {
+    top: 6px;
+    width: calc(100% - 16px);
+    border-radius: 14px;
+  }
+  .guidance-main-content {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .maneuver-icon-box {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    font-size: 1.35rem;
+  }
+  .turn-dist-number {
+    font-size: 1.2rem;
+  }
+  .turn-action-txt {
+    font-size: 0.94rem;
+  }
+  .turn-road-name {
+    font-size: 0.82rem;
+  }
+  .nav-bottom-dock {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    width: calc(100% - 16px);
+    padding: 10px 12px;
+  }
 }
 
 /* Live Vehicle Marker on the Map */

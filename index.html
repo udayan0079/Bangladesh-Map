@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <!-- Header / Top Navigation Bar -->
@@ -374,58 +374,65 @@
       </div>
     </div>
 
-    <!-- Floating Live Turn-by-Turn Moving Navigation Simulation HUD -->
-    <div class="live-nav-hud" id="liveNavHud" style="display: none;">
+    <!-- Real-Time Top Guidance Banner (Google Maps Turn-by-Turn Style) -->
+    <div class="turn-guidance-banner" id="turnGuidanceBanner" style="display: none;">
       <!-- Off-Route Recalculation Alert Banner -->
       <div class="nav-reroute-bar" id="navRerouteBar" style="display: none;">
         <i class="fa-solid fa-arrows-rotate fa-spin"></i>
         <span data-i18n="reroutingMsg">⚠️ রুট পরিবর্তন শনাক্ত! নতুন শর্টেস্ট রুট হিসাব হচ্ছে...</span>
       </div>
 
-      <div class="live-nav-header">
-        <div class="nav-vehicle-pill">
-          <span class="pulse-radar"></span>
-          <i id="navVehicleIcon" class="fa-solid fa-car text-emerald"></i>
-          <span id="navVehicleText" data-i18n="navLiveDriving">লাইভ ড্রাইভিং</span>
+      <div class="guidance-main-content">
+        <div class="maneuver-icon-box" id="turnIconWrap">
+          <i id="turnManeuverIcon" class="fa-solid fa-arrow-up"></i>
         </div>
-        <div class="nav-speed-pill">
-          <i class="fa-solid fa-gauge-high"></i>
-          <span id="navLiveSpeed">৪৮ কিমি/ঘণ্টা</span>
+        <div class="maneuver-text-box">
+          <div class="turn-distance-row">
+            <span class="turn-dist-number" id="turnDistanceMeters">২৫০ মিটার পর</span>
+            <span class="turn-badge-live" id="turnLiveBadge"><span class="pulse-radar"></span> লাইভ</span>
+          </div>
+          <div class="turn-instruction-row">
+            <span class="turn-action-txt" id="turnInstructionText">ডানে মোড় নিন</span>
+            <span class="turn-road-divider">•</span>
+            <span class="turn-road-name" id="turnRoadName">প্রধান সড়ক</span>
+          </div>
         </div>
-        <button class="nav-close-btn" id="closeLiveNavBtn" title="নেভিগেশন বন্ধ করুন">
+        <button class="guidance-exit-btn" id="closeLiveNavBtn" title="নেভিগেশন বন্ধ করুন / Exit Navigation">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
+    </div>
 
-      <div class="live-nav-instruct-card">
-        <div class="turn-icon-wrap" id="navTurnIconWrap">
-          <i id="navTurnIcon" class="fa-solid fa-diamond-turn-right"></i>
+    <!-- Live Navigation Bottom Dock (Trip Metrics & GPS Movement Status) -->
+    <div class="nav-bottom-dock" id="navBottomDock" style="display: none;">
+      <div class="dock-metrics-wrap">
+        <div class="dock-metric-item">
+          <span class="dock-m-lbl" data-i18n="remainingDist">বাকি দূরত্ব</span>
+          <span class="dock-m-val" id="navRemainingDist">০ কিমি</span>
         </div>
-        <div class="turn-text-wrap">
-          <div id="navInstruction" class="nav-title-txt" data-i18n="straightRoad">সোজা প্রধান সড়ক অনুসরণ করুন</div>
-          <div id="navNextTurnDist" class="nav-dist-txt">পরবর্তী মোড়: ২৫০ মিটার</div>
+        <div class="dock-m-divider"></div>
+        <div class="dock-metric-item">
+          <span class="dock-m-lbl" data-i18n="remainingTime">বাকি সময়</span>
+          <span class="dock-m-val highlight" id="navRemainingTime">০ মিনিট</span>
         </div>
-      </div>
-
-      <div class="live-nav-metrics-row">
-        <div class="nav-metric-unit">
-          <span class="m-lbl" data-i18n="remainingDist">বাকি দূরত্ব</span>
-          <span class="m-val" id="navRemainingDist">০ কিমি</span>
-        </div>
-        <div class="m-sep"></div>
-        <div class="nav-metric-unit">
-          <span class="m-lbl" data-i18n="remainingTime">বাকি সময়</span>
-          <span class="m-val highlight" id="navRemainingTime">০ মিনিট</span>
-        </div>
-        <div class="m-sep"></div>
-        <div class="nav-metric-unit">
-          <span class="m-lbl" data-i18n="speedBoost">স্পিড বুস্ট</span>
-          <div class="nav-ctrls">
-            <button id="pauseNavBtn" class="nav-btn-icon" title="বিরতি / চালু"><i class="fa-solid fa-pause"></i></button>
-            <button id="speedNavBtn" class="nav-btn-speed" title="সিমুলেশন স্পিড পরিবর্তন">1x</button>
-            <button id="rerouteNavBtn" class="nav-btn-icon nav-btn-reroute" title="অন্য রাস্তায় গেলে রিরুট করুন (Reroute)"><i class="fa-solid fa-arrows-rotate"></i></button>
+        <div class="dock-m-divider"></div>
+        <div class="dock-metric-item">
+          <span class="dock-m-lbl" data-i18n="gpsStatusLabel">জিপিএস অবস্থান</span>
+          <div class="dock-status-pill" id="navGpsStatusPill">
+            <span class="gps-dot stationary" id="gpsStatusDot"></span>
+            <span id="navLiveGpsStatus">দাঁড়িয়ে আছেন (০ কিমি/ঘণ্টা)</span>
           </div>
         </div>
+      </div>
+      <div class="dock-action-buttons">
+        <button id="navStepForwardBtn" class="dock-btn step-btn" title="ম্যানুয়াল টেস্ট: সামনে ৫০ মিটার যান">
+          <i class="fa-solid fa-person-walking-arrow-right"></i>
+          <span data-i18n="stepForward">সামনে যান (+৫০ মি)</span>
+        </button>
+        <button id="rerouteNavBtn" class="dock-btn reroute-btn" title="অন্য রাস্তায় গেলে রিরুট">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          <span data-i18n="rerouteBtn">নতুন রুট</span>
+        </button>
       </div>
     </div>
 
@@ -464,6 +471,6 @@
   <script src="bd_data.js?v=5"></script>
 
   <!-- Custom JS Application -->
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

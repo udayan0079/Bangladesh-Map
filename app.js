@@ -37,13 +37,25 @@ const state = {
   activeThanaMarker: null,
   navAnimation: {
     active: false,
-    paused: false,
-    speedMultiplier: 1,
     coordinates: [],
     steps: [],
     currentIndex: 0,
     marker: null,
     intervalId: null,
+    totalDistanceKm: 0,
+    totalMinutes: 0
+  },
+  navTracking: {
+    active: false,
+    watchId: null,
+    currentLatLng: null,
+    currentHeading: 0,
+    currentStepIndex: 0,
+    currentCoordIndex: 0,
+    isMoving: false,
+    speedKmh: 0,
+    coordinates: [],
+    steps: [],
     totalDistanceKm: 0,
     totalMinutes: 0
   }
@@ -109,7 +121,7 @@ const I18N = {
     mapClickTip: 'টিপ: ম্যাপের যেকোনো দুটি স্থানে সরাসরি ক্লিক করেও রুট বের করতে পারেন!',
     shortestDist: 'সর্বনিম্ন সড়ক দূরত্ব (Shortest)',
     estTime: 'আনুমানিক সময় (Est. Time)',
-    liveNavBtn: '▶ লাইভ নেভিগেশন সিমুলেশন (চলুন)',
+    liveNavBtn: '▶ লাইভ নেভিগেশন চালু করুন (চলুন)',
     startLabel: 'শুরু:',
     endLabel: 'গন্তব্য:',
     turnDirections: 'টার্ন-বাই-টার্ন সড়ক ডিরেকশন',
@@ -122,7 +134,12 @@ const I18N = {
     navLiveBiking: 'লাইভ বাইকিং',
     navLiveTrain: 'লাইভ রেল যাত্রা',
     quickPlaces: 'জনপ্রিয় স্থান:',
-    reroutingMsg: '⚠️ রুট পরিবর্তন শনাক্ত! নতুন শর্টেস্ট রুট হিসাব হচ্ছে...'
+    reroutingMsg: '⚠️ রুট পরিবর্তন শনাক্ত! নতুন শর্টেস্ট রুট হিসাব হচ্ছে...',
+    stepForward: 'সামনে যান (+৫০ মি)',
+    rerouteBtn: 'নতুন রুট',
+    gpsStatusLabel: 'জিপিএস অবস্থান',
+    stationaryStatus: 'দাঁড়িয়ে আছেন (০ কিমি/ঘণ্টা)',
+    movingStatus: 'চলমান'
   },
   en: {
     appTitle: 'Bangladesh Map',
@@ -164,7 +181,12 @@ const I18N = {
     navLiveBiking: 'Live Biking',
     navLiveTrain: 'Live Train Travel',
     quickPlaces: 'Popular Places:',
-    reroutingMsg: '⚠️ Off-route detected! Calculating new shortest route...'
+    reroutingMsg: '⚠️ Off-route detected! Calculating new shortest route...',
+    stepForward: 'Step Forward (+50m)',
+    rerouteBtn: 'Reroute',
+    gpsStatusLabel: 'GPS Status',
+    stationaryStatus: 'Stationary (0 km/h)',
+    movingStatus: 'Moving'
   }
 };
 
@@ -238,7 +260,7 @@ function initMap() {
     minZoom: 7,
     maxZoom: 20,
     maxBounds: BD_BOUNDS,
-    maxBoundsViscosity: 1.0, // Strictly prevent panning outside Bangladesh
+    maxBoundsViscosity: 0.35, // Relaxed from 1.0 to eliminate border bounce & tile tearing
     zoomControl: false
   });
 
@@ -250,14 +272,22 @@ function initMap() {
   // Custom Zoom Control at Bottom Right
   L.control.zoom({ position: 'bottomright' }).addTo(state.map);
 
-  // Setup Tile Layers with high resolution
+  // Setup Tile Layers with high resolution and smooth zoom caching (no 404s or white boxes)
   state.layers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    keepBuffer: 8,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
     attribution: '&copy; OpenStreetMap contributors (Bangladesh)'
   });
 
   state.layers.hot = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    keepBuffer: 8,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
     attribution: '&copy; OpenStreetMap contributors, Tiles style by Humanitarian OSM'
   });
 
@@ -265,6 +295,9 @@ function initMap() {
   state.layers.satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     maxNativeZoom: 19,
+    keepBuffer: 8,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '&copy; Google Satellite Imagery (High-Resolution)'
   });
@@ -273,6 +306,9 @@ function initMap() {
   state.layers.carto = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     maxNativeZoom: 19,
+    keepBuffer: 8,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '&copy; Google Maps (Clean Road Network)'
   });
@@ -282,6 +318,9 @@ function initMap() {
   state.layers.topo = L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     maxNativeZoom: 18,
+    keepBuffer: 8,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '&copy; Google Terrain (Hillshading & Physical Geography)'
   });
@@ -290,7 +329,7 @@ function initMap() {
   state.activeLayer = state.layers.osm;
   state.activeLayer.addTo(state.map);
 
-  // Apply Bangladesh-Only Inverse Mask
+  // Apply Bangladesh-Only Inverse Mask using Canvas renderer (eliminates SVG coordinate glitch)
   applyBangladeshMask();
 
   // Draw Major Rivers Layer (smooth curved waterways)
@@ -300,20 +339,21 @@ function initMap() {
   state.map.on('click', handleMapClick);
 }
 
-// Apply Inverse Mask (Hides Everything Outside Bangladesh Borders)
+// Apply Inverse Mask (Hides Everything Outside Bangladesh Borders without SVG coordinate overflow)
 function applyBangladeshMask() {
   if (typeof BD_BOUNDARY_GEOJSON === 'undefined' || !BD_BOUNDARY_GEOJSON.features) {
     console.warn('BD_BOUNDARY_GEOJSON not loaded.');
     return;
   }
 
-  // World Outer Ring covering the whole globe
-  const worldOuterRing = [
-    [-90, -180],
-    [-90, 180],
-    [90, 180],
-    [90, -180],
-    [-90, -180]
+  // Regional Outer Ring covering South Asia / Bay of Bengal bounding region
+  // (Prevents SVG/Canvas integer overflow and black box glitch on deep zoom)
+  const regionalOuterRing = [
+    [15.0, 80.0],
+    [15.0, 98.0],
+    [30.0, 98.0],
+    [30.0, 80.0],
+    [15.0, 80.0]
   ];
 
   // Extract Holes: Bangladesh polygon boundaries converted to [lat, lng]
@@ -330,13 +370,16 @@ function applyBangladeshMask() {
     }
   });
 
-  // Create Inverted Polygon with Dedicated maskPane
-  state.maskPolygon = L.polygon([worldOuterRing, ...holes], {
+  // Dedicated Canvas Renderer for mask: eliminates SVG coordinate overflow bugs!
+  const maskRenderer = L.canvas({ pane: 'maskPane', padding: 0.5 });
+
+  state.maskPolygon = L.polygon([regionalOuterRing, ...holes], {
     pane: 'maskPane',
+    renderer: maskRenderer,
     color: '#10b981',       // Vibrant emerald border along Bangladesh border
     weight: 2.5,
     fillColor: '#0b1329',   // Masks outside regions (India, Myanmar, etc.)
-    fillOpacity: 0.98,
+    fillOpacity: 0.96,
     interactive: false      // Allow click events to pass
   }).addTo(state.map);
 }
@@ -807,8 +850,34 @@ function handleMapClick(e) {
     return;
   }
 
-  // If Live Navigation is Active: Clicking another road simulates going off-route -> instant reroute!
-  if (state.navAnimation.active) {
+  // If Live Navigation is Active:
+  if (state.navTracking.active || state.navAnimation.active) {
+    const coords = state.navTracking.coordinates || state.navAnimation.coordinates || [];
+    let closestDistM = Infinity;
+    let closestIdx = 0;
+    for (let i = 0; i < coords.length; i++) {
+      const d = haversineDistance(lat, lng, coords[i][0], coords[i][1]) * 1000;
+      if (d < closestDistM) {
+        closestDistM = d;
+        closestIdx = i;
+      }
+    }
+    // If clicked along the route within 50 meters: move arrow there for testing and stand still!
+    if (closestDistM <= 50 && coords.length > 0) {
+      state.navTracking.currentCoordIndex = closestIdx;
+      const targetPt = coords[closestIdx];
+      const nextPt = coords[Math.min(coords.length - 1, closestIdx + 1)];
+      const heading = getHeadingAngle(targetPt[0], targetPt[1], nextPt[0], nextPt[1]);
+      state.navTracking.currentLatLng = [targetPt[0], targetPt[1]];
+      state.navTracking.currentHeading = heading;
+      updateLiveVehicleMarker(targetPt[0], targetPt[1], state.travelMode, heading);
+      updateGpsMovementDisplay(false, 0);
+      updateLiveTurnGuidance(targetPt[0], targetPt[1]);
+      showToast(state.lang === 'bn' ? 'অ্যারো এই স্থানে অবস্থান নিয়েছে (দাঁড়িয়ে আছে)' : 'Arrow moved to this location (standing still)');
+      return;
+    }
+
+    // Clicked off-route -> instant reroute to destination!
     handleOffRouteReroute(lat, lng);
     return;
   }
@@ -1362,7 +1431,7 @@ function setupRouteUI() {
   document.getElementById('whereToGoBtn')?.addEventListener('click', openWhereToGoPanel);
   document.getElementById('floatingWhereToGoBtn')?.addEventListener('click', openWhereToGoPanel);
 
-  // Live Navigation Simulation Control Event Listeners
+  // Live Real-Time Navigation Control Event Listeners
   const startLiveNavBtn = document.getElementById('startLiveNavBtn');
   if (startLiveNavBtn) {
     startLiveNavBtn.addEventListener('click', startLiveNavigation);
@@ -1373,23 +1442,20 @@ function setupRouteUI() {
     closeLiveNavBtn.addEventListener('click', () => stopLiveNavigation(true));
   }
 
-  const pauseNavBtn = document.getElementById('pauseNavBtn');
-  if (pauseNavBtn) {
-    pauseNavBtn.addEventListener('click', togglePauseLiveNavigation);
+  // Manual Step Forward Button (+50m per click for testing)
+  const navStepForwardBtn = document.getElementById('navStepForwardBtn');
+  if (navStepForwardBtn) {
+    navStepForwardBtn.addEventListener('click', stepForwardManually);
   }
 
-  const speedNavBtn = document.getElementById('speedNavBtn');
-  if (speedNavBtn) {
-    speedNavBtn.addEventListener('click', cycleNavSpeedMultiplier);
-  }
-
-  // Reroute Button in Live Navigation HUD
+  // Reroute Button in Live Navigation Dock
   const rerouteNavBtn = document.getElementById('rerouteNavBtn');
   if (rerouteNavBtn) {
     rerouteNavBtn.addEventListener('click', () => {
-      if (state.navAnimation.active && state.navAnimation.coordinates.length > 0) {
-        const curr = state.navAnimation.coordinates[state.navAnimation.currentIndex || 0];
-        handleOffRouteReroute(curr[0], curr[1]);
+      if (state.navTracking.active && state.navTracking.currentLatLng) {
+        handleOffRouteReroute(state.navTracking.currentLatLng[0], state.navTracking.currentLatLng[1]);
+      } else if (state.routePoints.start && state.routePoints.end) {
+        calculateRoute();
       } else {
         showToast(state.lang === 'bn' ? 'নেভিগেশন চলাকালে অন্য রাস্তায় গেলে রিরুট সক্রিয় হবে' : 'Reroute activates when deviating from route during navigation');
       }
@@ -1490,6 +1556,13 @@ async function handleOffRouteReroute(newLat, newLng) {
       state.navAnimation.totalDistanceKm = parseFloat(distanceKm);
       state.navAnimation.currentIndex = 0;
 
+      state.navTracking.coordinates = newCoords;
+      state.navTracking.steps = route.legs[0].steps || [];
+      state.navTracking.totalDistanceKm = parseFloat(distanceKm);
+      state.navTracking.currentCoordIndex = 0;
+      state.navTracking.currentStepIndex = 0;
+      state.navTracking.currentLatLng = [newLat, newLng];
+
       // Update Polyline
       if (state.routePolyline) state.map.removeLayer(state.routePolyline);
 
@@ -1520,8 +1593,13 @@ async function handleOffRouteReroute(newLat, newLng) {
       if (newCoords.length > 1) {
         const nextPt = newCoords[1];
         const heading = getHeadingAngle(newCoords[0][0], newCoords[0][1], nextPt[0], nextPt[1]);
+        state.navTracking.currentHeading = heading;
         updateLiveVehicleMarker(newCoords[0][0], newCoords[0][1], state.travelMode, heading);
       }
+
+      // Update Top Guidance Bar with new route and measured distance
+      updateLiveTurnGuidance(newLat, newLng);
+      updateRemainingTripMetrics(newLat, newLng);
 
       state.map.panTo([newLat, newLng], { animate: true, duration: 0.5 });
 
@@ -1614,11 +1692,19 @@ function updateLiveVehicleMarker(lat, lng, mode, heading = 0) {
   state.navAnimation.marker.setIcon(icon);
 }
 
-// Start Live Navigation Simulation
+// ==========================================
+// REAL-TIME GPS NAVIGATION ENGINE
+// The arrow strictly tracks real user location!
+// When the user stands still, the arrow stands still.
+// ==========================================
+
+// Start Live Turn-by-Turn GPS Navigation
 function startLiveNavigation() {
   const coords = state.navAnimation.coordinates;
   if (!coords || coords.length < 2) {
-    showToast('প্রথমে শুরু ও গন্তব্য স্থান সিলেক্ট করে রুট বের করুন!');
+    showToast(state.lang === 'bn' 
+      ? 'প্রথমে শুরু ও গন্তব্য স্থান সিলেক্ট করে রুট বের করুন!' 
+      : 'Please select start & destination to find a route first!');
     return;
   }
 
@@ -1629,300 +1715,403 @@ function startLiveNavigation() {
     document.getElementById('mobileRouteBtn')?.classList.remove('active');
   }
 
-  // Show Live Navigation HUD
-  const hud = document.getElementById('liveNavHud');
-  if (hud) hud.style.display = 'flex';
+  // Show Top Guidance Banner and Bottom Dock
+  const topBanner = document.getElementById('turnGuidanceBanner');
+  if (topBanner) topBanner.style.display = 'flex';
+  const bottomDock = document.getElementById('navBottomDock');
+  if (bottomDock) bottomDock.style.display = 'flex';
 
-  // Initialize/Reset Navigation state
+  // Initialize navigation tracking state
+  state.navTracking.active = true;
   state.navAnimation.active = true;
-  state.navAnimation.paused = false;
-  state.navAnimation.currentIndex = 0;
-  state.navAnimation.speedMultiplier = 1;
+  state.navTracking.coordinates = coords;
+  state.navTracking.steps = state.navAnimation.steps || [];
+  state.navTracking.totalDistanceKm = state.navAnimation.totalDistanceKm || 0;
+  state.navTracking.totalMinutes = state.navAnimation.totalMinutes || 0;
+  state.navTracking.currentCoordIndex = 0;
+  state.navTracking.currentStepIndex = 0;
+  state.navTracking.isMoving = false;
+  state.navTracking.speedKmh = 0;
 
-  // Update speed boost button label
-  const speedBtn = document.getElementById('speedNavBtn');
-  if (speedBtn) speedBtn.innerText = '1x';
+  // Clear any existing animation interval (Arrow NEVER auto-moves!)
+  if (state.navAnimation.intervalId) {
+    clearInterval(state.navAnimation.intervalId);
+    state.navAnimation.intervalId = null;
+  }
 
-  // Update pause button icon
-  const pauseBtn = document.getElementById('pauseNavBtn');
-  if (pauseBtn) pauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-
-  // Configure mode HUD styling
-  updateNavModeHUD();
-
-  // Create Vehicle Marker at starting coordinate
+  // Initial user position at route start
   const startPt = coords[0];
   const nextPt = coords[1];
   const initialHeading = getHeadingAngle(startPt[0], startPt[1], nextPt[0], nextPt[1]);
+  state.navTracking.currentLatLng = [startPt[0], startPt[1]];
+  state.navTracking.currentHeading = initialHeading;
 
+  // Create or update vehicle marker at start point
   if (state.navAnimation.marker) {
     state.map.removeLayer(state.navAnimation.marker);
     state.navAnimation.marker = null;
   }
   updateLiveVehicleMarker(startPt[0], startPt[1], state.travelMode, initialHeading);
 
-  // Zoom into initial point and start animation
-  state.map.setView([startPt[0], startPt[1]], Math.max(state.map.getZoom(), 14), { animate: true });
+  // Zoom into user position
+  state.map.setView([startPt[0], startPt[1]], Math.max(state.map.getZoom(), 16), { animate: true });
 
-  if (state.navAnimation.intervalId) {
-    clearInterval(state.navAnimation.intervalId);
+  // Update status badge to "দাঁড়িয়ে আছেন (০ কিমি/ঘণ্টা)"
+  updateGpsMovementDisplay(false, 0);
+
+  // Update top turn guidance with initial step & live measured meters
+  updateLiveTurnGuidance(startPt[0], startPt[1]);
+
+  // Update remaining trip metrics in bottom dock
+  updateRemainingTripMetrics(startPt[0], startPt[1]);
+
+  // START REAL GPS TRACKING: Arrow only moves when user physically moves!
+  if (navigator.geolocation) {
+    if (state.navTracking.watchId !== null) {
+      navigator.geolocation.clearWatch(state.navTracking.watchId);
+    }
+    state.navTracking.watchId = navigator.geolocation.watchPosition(
+      onGpsPositionUpdate,
+      onGpsPositionError,
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    );
   }
 
-  // Animation Tick Interval (~150ms per tick)
-  state.navAnimation.intervalId = setInterval(navAnimationStep, 150);
-
-  const modeName = state.travelMode === 'train' ? 'রেলপথ' : (state.travelMode === 'bike' ? 'বাইক' : 'গাড়ি');
-  showToast(`লাইভ ${modeName} নেভিগেশন শুরু হয়েছে! ম্যাপে লাইভ গতিবিধি লক্ষ্য করুন।`);
+  showToast(state.lang === 'bn' 
+    ? 'লাইভ নেভিগেশন চালু হয়েছে! আপনি যেখানে যাবেন কেবল সেখানেই অ্যারো যাবে।' 
+    : 'Live navigation active! The arrow follows only your real movement.');
 }
 
-// Step function for each tick of simulation
-function navAnimationStep() {
-  if (!state.navAnimation.active || state.navAnimation.paused) return;
+// GPS Position Update Callback: Triggered ONLY when physical location changes
+function onGpsPositionUpdate(pos) {
+  if (!state.navTracking.active) return;
 
-  const coords = state.navAnimation.coordinates;
-  const totalPoints = coords.length;
+  const newLat = pos.coords.latitude;
+  const newLng = pos.coords.longitude;
+  const rawSpeed = pos.coords.speed;
+  const rawHeading = pos.coords.heading;
 
-  if (state.navAnimation.currentIndex >= totalPoints - 1) {
+  const prevCoord = state.navTracking.currentLatLng;
+  let distMovedMeters = 0;
+  if (prevCoord) {
+    distMovedMeters = Math.round(haversineDistance(prevCoord[0], prevCoord[1], newLat, newLng) * 1000);
+  }
+
+  // If user has not moved at least 3 meters: STAND STILL!
+  // "user daray thakle arrow o daray thakbe"
+  if (distMovedMeters < 3) {
+    state.navTracking.isMoving = false;
+    state.navTracking.speedKmh = 0;
+    updateGpsMovementDisplay(false, 0);
+    return; // Stand completely still!
+  }
+
+  // User physically moved!
+  state.navTracking.isMoving = true;
+  let speedKmh = 0;
+  if (rawSpeed && rawSpeed > 0) {
+    speedKmh = Math.round(rawSpeed * 3.6);
+  } else {
+    speedKmh = Math.min(110, Math.max(5, Math.round(distMovedMeters * 2.2)));
+  }
+  state.navTracking.speedKmh = speedKmh;
+  updateGpsMovementDisplay(true, speedKmh);
+
+  // Calculate heading
+  let heading = state.navTracking.currentHeading;
+  if (rawHeading && !isNaN(rawHeading) && rawHeading >= 0) {
+    heading = rawHeading;
+  } else if (prevCoord) {
+    heading = getHeadingAngle(prevCoord[0], prevCoord[1], newLat, newLng);
+  }
+  state.navTracking.currentHeading = heading;
+  state.navTracking.currentLatLng = [newLat, newLng];
+
+  // Update vehicle marker on map
+  updateLiveVehicleMarker(newLat, newLng, state.travelMode, heading);
+  state.map.panTo([newLat, newLng], { animate: true, duration: 0.4 });
+
+  // Update Top Guidance Bar with live measured meters
+  updateLiveTurnGuidance(newLat, newLng);
+
+  // Check if off-route (> 60m from route polyline) -> auto reroute
+  checkAndHandleOffRoute(newLat, newLng);
+}
+
+// GPS Error Callback
+function onGpsPositionError(err) {
+  console.warn('GPS location tracking error:', err);
+  updateGpsMovementDisplay(false, 0);
+}
+
+// Update GPS Movement Status Indicator in Bottom Dock
+function updateGpsMovementDisplay(isMoving, speedKmh = 0) {
+  const dot = document.getElementById('gpsStatusDot');
+  const txt = document.getElementById('navLiveGpsStatus');
+  if (!dot || !txt) return;
+
+  if (isMoving && speedKmh > 0) {
+    dot.className = 'gps-dot moving';
+    txt.innerText = state.lang === 'bn' 
+      ? `চলমান (${formatNumber(speedKmh)} কিমি/ঘণ্টা)` 
+      : `Moving (${formatNumber(speedKmh)} km/h)`;
+  } else {
+    dot.className = 'gps-dot stationary';
+    txt.innerText = state.lang === 'bn' 
+      ? 'দাঁড়িয়ে আছেন (০ কিমি/ঘণ্টা)' 
+      : 'Stationary (0 km/h)';
+  }
+}
+
+// Update Real-Time Top Guidance Banner with Measured Meters and Road Turn
+function updateLiveTurnGuidance(userLat, userLng) {
+  const steps = state.navTracking.steps;
+  const turnBanner = document.getElementById('turnGuidanceBanner');
+  if (!turnBanner || !steps || steps.length === 0) return;
+
+  const distEl = document.getElementById('turnDistanceMeters');
+  const actionEl = document.getElementById('turnInstructionText');
+  const roadEl = document.getElementById('turnRoadName');
+  const iconWrap = document.getElementById('turnIconWrap');
+  const iconEl = document.getElementById('turnManeuverIcon');
+
+  let currentIdx = state.navTracking.currentStepIndex || 0;
+  if (currentIdx >= steps.length) {
     // Reached destination!
-    stopLiveNavigation(false);
+    if (distEl) distEl.innerText = state.lang === 'bn' ? 'গন্তব্যে পৌঁছেছেন!' : 'Arrived!';
+    if (actionEl) actionEl.innerText = state.lang === 'bn' ? 'যাত্রা সমাপ্ত' : 'Trip Complete';
+    if (roadEl) roadEl.innerText = state.routePoints.end ? state.routePoints.end.name : '';
+    if (iconEl) iconEl.className = 'fa-solid fa-flag-checkered';
+    if (iconWrap) iconWrap.style.background = '#10b981';
+    return;
+  }
+
+  let step = steps[currentIdx];
+  let maneuverLoc = step.maneuver && step.maneuver.location 
+    ? [step.maneuver.location[1], step.maneuver.location[0]]
+    : null;
+
+  // Calculate live distance in meters from user coordinate to this step's maneuver point
+  let metersToTurn = 500;
+  if (maneuverLoc) {
+    metersToTurn = Math.round(haversineDistance(userLat, userLng, maneuverLoc[0], maneuverLoc[1]) * 1000);
+  } else {
+    metersToTurn = Math.round(step.distance || 500);
+  }
+
+  // If user reached within 25 meters of this turn, advance to next turn!
+  if (metersToTurn <= 25 && currentIdx < steps.length - 1) {
+    state.navTracking.currentStepIndex++;
+    currentIdx = state.navTracking.currentStepIndex;
+    step = steps[currentIdx];
+    if (step.maneuver && step.maneuver.location) {
+      maneuverLoc = [step.maneuver.location[1], step.maneuver.location[0]];
+      metersToTurn = Math.round(haversineDistance(userLat, userLng, maneuverLoc[0], maneuverLoc[1]) * 1000);
+    }
+  }
+
+  // Format the distance in meters / kilometers
+  if (metersToTurn <= 25) {
+    if (distEl) distEl.innerText = state.lang === 'bn' ? 'এখনই মোড় নিন!' : 'Turn Now!';
+  } else if (metersToTurn < 1000) {
+    if (distEl) distEl.innerText = `${formatNumber(metersToTurn)} ${state.lang === 'bn' ? 'মিটার পর' : 'm'}`;
+  } else {
+    const km = (metersToTurn / 1000).toFixed(1);
+    if (distEl) distEl.innerText = `${formatNumber(km)} ${state.lang === 'bn' ? 'কিমি পর' : 'km'}`;
+  }
+
+  // Extract turn direction instruction & icon
+  const type = (step.maneuver && step.maneuver.type) || '';
+  const modifier = (step.maneuver && step.maneuver.modifier) || '';
+  let instructionText = state.lang === 'bn' ? 'সোজা চলুন' : 'Keep Straight';
+  let iconClass = 'fa-solid fa-arrow-up';
+  let iconBg = 'rgba(255, 255, 255, 0.2)';
+
+  if (type === 'arrive' || currentIdx === steps.length - 1) {
+    instructionText = state.lang === 'bn' ? 'গন্তব্যে পৌঁছাচ্ছেন' : 'Arriving at destination';
+    iconClass = 'fa-solid fa-flag-checkered';
+    iconBg = '#10b981';
+  } else if (modifier.includes('right')) {
+    if (modifier.includes('slight')) {
+      instructionText = state.lang === 'bn' ? 'সামান্য ডানে চলুন' : 'Bear Right';
+      iconClass = 'fa-solid fa-arrow-trend-up';
+    } else if (modifier.includes('sharp')) {
+      instructionText = state.lang === 'bn' ? 'তীক্ষ্ণ ডানে মোড় নিন' : 'Sharp Right';
+      iconClass = 'fa-solid fa-turn-right';
+    } else {
+      instructionText = state.lang === 'bn' ? 'ডানে মোড় নিন' : 'Turn Right';
+      iconClass = 'fa-solid fa-turn-right';
+    }
+    iconBg = '#3b82f6';
+  } else if (modifier.includes('left')) {
+    if (modifier.includes('slight')) {
+      instructionText = state.lang === 'bn' ? 'সামান্য বামে চলুন' : 'Bear Left';
+      iconClass = 'fa-solid fa-arrow-trend-up fa-flip-horizontal';
+    } else if (modifier.includes('sharp')) {
+      instructionText = state.lang === 'bn' ? 'তীক্ষ্ণ বামে মোড় নিন' : 'Sharp Left';
+      iconClass = 'fa-solid fa-turn-left';
+    } else {
+      instructionText = state.lang === 'bn' ? 'বামে মোড় নিন' : 'Turn Left';
+      iconClass = 'fa-solid fa-turn-left';
+    }
+    iconBg = '#f59e0b';
+  } else if (modifier.includes('uturn') || type.includes('uturn')) {
+    instructionText = state.lang === 'bn' ? 'ইউ-টার্ন নিন' : 'Make a U-Turn';
+    iconClass = 'fa-solid fa-arrow-rotate-left';
+    iconBg = '#ef4444';
+  } else if (type === 'roundabout') {
+    instructionText = state.lang === 'bn' ? 'গোলচত্বর অতিক্রম করুন' : 'Enter Roundabout';
+    iconClass = 'fa-solid fa-arrows-spin';
+    iconBg = '#8b5cf6';
+  } else {
+    instructionText = state.lang === 'bn' ? 'সোজা সড়ক অনুসরণ করুন' : 'Follow straight road';
+    iconClass = 'fa-solid fa-arrow-up';
+    iconBg = 'rgba(255, 255, 255, 0.2)';
+  }
+
+  if (actionEl) actionEl.innerText = instructionText;
+  if (roadEl) roadEl.innerText = step.name ? step.name : (state.lang === 'bn' ? 'প্রধান সড়ক' : 'Main Road');
+  if (iconEl) iconEl.className = iconClass;
+  if (iconWrap) iconWrap.style.background = iconBg;
+
+  // Update Remaining distance & time in Bottom Dock
+  updateRemainingTripMetrics(userLat, userLng);
+}
+
+// Update Remaining Trip Distance & Time in Bottom Dock
+function updateRemainingTripMetrics(userLat, userLng) {
+  const coords = state.navTracking.coordinates;
+  const distEl = document.getElementById('navRemainingDist');
+  const timeEl = document.getElementById('navRemainingTime');
+  if (!coords || coords.length === 0 || !distEl || !timeEl) return;
+
+  const totalPoints = coords.length;
+  const currIdx = state.navTracking.currentCoordIndex || 0;
+  const fractionRemaining = Math.max(0, (totalPoints - 1 - currIdx) / Math.max(1, totalPoints - 1));
+
+  const remainingKm = Math.max(0, (state.navTracking.totalDistanceKm * fractionRemaining)).toFixed(1);
+  const remainingMins = Math.max(0, Math.round(state.navTracking.totalMinutes * fractionRemaining));
+
+  distEl.innerText = `${formatNumber(remainingKm)} ${state.lang === 'bn' ? 'কিমি' : 'km'}`;
+  timeEl.innerText = state.lang === 'bn' ? formatMinutesToBangla(remainingMins) : `${remainingMins} min`;
+}
+
+// Manual Test Step Forward Function (+50m per click for PC/indoor testing)
+// Note: Only steps once per click; DOES NOT auto-move afterwards!
+function stepForwardManually() {
+  if (!state.navTracking.active) {
+    showToast(state.lang === 'bn' ? 'প্রথমে লাইভ নেভিগেশন চালু করুন' : 'Start live navigation first');
+    return;
+  }
+  const coords = state.navTracking.coordinates;
+  if (!coords || coords.length === 0) return;
+
+  const curr = state.navTracking.currentCoordIndex || 0;
+  if (curr >= coords.length - 1) {
     showDestinationReached();
     return;
   }
 
-  // Calculate jump steps based on speedMultiplier and route density
-  let stepIncrement = 1;
-  const mult = state.navAnimation.speedMultiplier || 1;
-  if (mult === 2) stepIncrement = 2;
-  else if (mult === 5) stepIncrement = totalPoints > 300 ? 5 : 4;
-  else if (mult === 10) stepIncrement = totalPoints > 500 ? 10 : 7;
+  // Advance by a realistic step (~50-80 meters)
+  const jump = Math.min(coords.length - 1 - curr, Math.max(2, Math.floor(coords.length / 60) || 3));
+  state.navTracking.currentCoordIndex = curr + jump;
+  const newPt = coords[state.navTracking.currentCoordIndex];
+  const nextPt = coords[Math.min(coords.length - 1, state.navTracking.currentCoordIndex + 1)];
+  const heading = getHeadingAngle(newPt[0], newPt[1], nextPt[0], nextPt[1]);
 
-  state.navAnimation.currentIndex = Math.min(totalPoints - 1, state.navAnimation.currentIndex + stepIncrement);
-  const currIdx = state.navAnimation.currentIndex;
-  const currentCoord = coords[currIdx];
+  state.navTracking.currentLatLng = [newPt[0], newPt[1]];
+  state.navTracking.currentHeading = heading;
+  state.navTracking.isMoving = true;
+  state.navTracking.speedKmh = 35;
 
-  // Calculate Heading
-  let heading = 0;
-  if (currIdx < totalPoints - 1) {
-    const nextCoord = coords[currIdx + 1];
-    heading = getHeadingAngle(currentCoord[0], currentCoord[1], nextCoord[0], nextCoord[1]);
-  } else if (currIdx > 0) {
-    const prevCoord = coords[currIdx - 1];
-    heading = getHeadingAngle(prevCoord[0], prevCoord[1], currentCoord[0], currentCoord[1]);
-  }
+  // Move arrow to new point
+  updateLiveVehicleMarker(newPt[0], newPt[1], state.travelMode, heading);
+  state.map.panTo([newPt[0], newPt[1]], { animate: true, duration: 0.3 });
 
-  // Update vehicle marker on map
-  updateLiveVehicleMarker(currentCoord[0], currentCoord[1], state.travelMode, heading);
+  // Update status: briefly show moving, then stationary!
+  updateGpsMovementDisplay(true, 35);
+  setTimeout(() => {
+    if (state.navTracking.active) {
+      updateGpsMovementDisplay(false, 0);
+    }
+  }, 1000);
 
-  // Smoothly center the map on the vehicle every 3 frames
-  if (currIdx % (3 * stepIncrement) === 0 || currIdx === totalPoints - 1) {
-    state.map.panTo([currentCoord[0], currentCoord[1]], { animate: true, duration: 0.3 });
-  }
-
-  // Calculate remaining distance and time
-  const remainingFraction = (totalPoints - 1 - currIdx) / Math.max(1, totalPoints - 1);
-  const remainingKm = Math.max(0, (state.navAnimation.totalDistanceKm * remainingFraction)).toFixed(1);
-  const remainingMins = Math.max(0, Math.round(state.navAnimation.totalMinutes * remainingFraction));
-
-  const distEl = document.getElementById('navRemainingDist');
-  if (distEl) distEl.innerText = `${toBanglaNum(remainingKm)} কিমি`;
-
-  const timeEl = document.getElementById('navRemainingTime');
-  if (timeEl) timeEl.innerText = formatMinutesToBangla(remainingMins);
-
-  // Dynamic realistic speed gauge with natural fluctuation
-  updateNavSpeedDisplay(currIdx);
-
-  // Turn-by-Turn Instruction matching
-  updateUpcomingTurnInstruction(currIdx, remainingKm);
+  // Update Top Guidance Bar with live measured meters
+  updateLiveTurnGuidance(newPt[0], newPt[1]);
 }
 
-// Update Live Speed in HUD
-function updateNavSpeedDisplay(idx) {
-  const speedEl = document.getElementById('navLiveSpeed');
-  if (!speedEl) return;
+// Check If User Moved Off-Route (> 60m away from route polyline)
+function checkAndHandleOffRoute(userLat, userLng) {
+  const coords = state.navTracking.coordinates;
+  if (!coords || coords.length === 0) return;
 
-  let baseSpeed = 46;
-  if (state.travelMode === 'bike') baseSpeed = 54;
-  else if (state.travelMode === 'train') baseSpeed = 68;
-
-  // Add realistic speed jitter (+/- 6 km/h)
-  const jitter = Math.round(Math.sin(idx * 0.4) * 5 + Math.cos(idx * 0.2) * 2);
-  const liveSpeed = Math.max(20, baseSpeed + jitter);
-
-  speedEl.innerText = `${toBanglaNum(liveSpeed)} কিমি/ঘণ্টা`;
-}
-
-// Update Upcoming Turn Instruction in HUD
-function updateUpcomingTurnInstruction(currIdx, remainingKm) {
-  const instructEl = document.getElementById('navInstruction');
-  const distEl = document.getElementById('navNextTurnDist');
-  const iconWrap = document.getElementById('navTurnIconWrap');
-  const iconEl = document.getElementById('navTurnIcon');
-
-  if (!instructEl || !distEl || !iconWrap || !iconEl) return;
-
-  const steps = state.navAnimation.steps;
-
-  if (parseFloat(remainingKm) <= 0.1 || currIdx >= state.navAnimation.coordinates.length - 2) {
-    instructEl.innerText = 'গন্তব্যে পৌঁছাচ্ছেন!';
-    distEl.innerText = '১০০ মিটারের মধ্যে গন্তব্য';
-    iconEl.className = 'fa-solid fa-flag-checkered';
-    iconWrap.style.background = '#10b981';
-    return;
-  }
-
-  if (steps && steps.length > 0) {
-    // Find closest step based on fraction
-    const totalPoints = state.navAnimation.coordinates.length;
-    const stepIdx = Math.min(steps.length - 1, Math.floor((currIdx / totalPoints) * steps.length));
-    const step = steps[stepIdx];
-
-    if (step && step.maneuver) {
-      const type = step.maneuver.type || '';
-      const modifier = step.maneuver.modifier || '';
-      let text = step.maneuver.instruction || step.name || 'সড়ক অনুসরণ করুন';
-      let icon = 'fa-solid fa-arrow-up';
-      let bgColor = '#10b981';
-
-      if (modifier.includes('right')) {
-        text = 'ডানে মোড় নিন (Turn Right)';
-        icon = 'fa-solid fa-turn-right';
-        bgColor = '#3b82f6';
-      } else if (modifier.includes('left')) {
-        text = 'বামে মোড় নিন (Turn Left)';
-        icon = 'fa-solid fa-turn-left';
-        bgColor = '#f59e0b';
-      } else if (modifier.includes('slight right')) {
-        text = 'সামনে সামান্য ডানে রাখুন';
-        icon = 'fa-solid fa-arrow-right';
-        bgColor = '#3b82f6';
-      } else if (modifier.includes('slight left')) {
-        text = 'সামনে সামান্য বামে রাখুন';
-        icon = 'fa-solid fa-arrow-left';
-        bgColor = '#f59e0b';
-      } else if (modifier.includes('uturn')) {
-        text = 'ইউ-টার্ন নিন (U-Turn)';
-        icon = 'fa-solid fa-arrow-rotate-left';
-        bgColor = '#ef4444';
-      } else if (type === 'roundabout') {
-        text = 'গোলচত্বর অতিক্রম করুন';
-        icon = 'fa-solid fa-arrows-spin';
-        bgColor = '#8b5cf6';
-      } else {
-        text = 'সোজা প্রধান সড়ক অনুসরণ করুন';
-        icon = 'fa-solid fa-arrow-up';
-        bgColor = '#10b981';
-      }
-
-      instructEl.innerText = text;
-      distEl.innerText = `পরবর্তী মোড়: ~${toBanglaNum((Math.max(0.1, (step.distance || 500) / 1000)).toFixed(1))} কিমি`;
-      iconEl.className = icon;
-      iconWrap.style.background = bgColor;
-      return;
+  let minDistanceMeters = Infinity;
+  for (let i = 0; i < coords.length; i++) {
+    const d = haversineDistance(userLat, userLng, coords[i][0], coords[i][1]) * 1000;
+    if (d < minDistanceMeters) {
+      minDistanceMeters = d;
     }
   }
 
-  // Fallback default message
-  instructEl.innerText = state.travelMode === 'train' ? 'রেলপথ বরাবর ট্রেন যাত্রা চলছে' : 'সোজা প্রধান সড়ক অনুসরণ করুন';
-  distEl.innerText = `বাকি পথ: ${toBanglaNum(remainingKm)} কিমি`;
-  iconEl.className = state.travelMode === 'train' ? 'fa-solid fa-train-subway' : 'fa-solid fa-diamond-turn-right';
-}
-
-// Update HUD Header and Vehicle Pills
-function updateNavModeHUD() {
-  const icon = document.getElementById('navVehicleIcon');
-  const txt = document.getElementById('navVehicleText');
-  const instructCard = document.querySelector('.live-nav-instruct-card');
-
-  if (state.travelMode === 'train') {
-    if (icon) {
-      icon.className = 'fa-solid fa-train-subway text-cyan';
-      icon.style.color = '#0284c7';
-    }
-    if (txt) txt.innerText = 'লাইভ রেল যাত্রা';
-    if (instructCard) instructCard.style.borderLeftColor = '#0284c7';
-  } else if (state.travelMode === 'bike') {
-    if (icon) {
-      icon.className = 'fa-solid fa-motorcycle text-amber';
-      icon.style.color = '#f59e0b';
-    }
-    if (txt) txt.innerText = 'লাইভ বাইকিং';
-    if (instructCard) instructCard.style.borderLeftColor = '#f59e0b';
-  } else {
-    if (icon) {
-      icon.className = 'fa-solid fa-car text-emerald';
-      icon.style.color = '#10b981';
-    }
-    if (txt) txt.innerText = 'লাইভ কার ড্রাইভিং';
-    if (instructCard) instructCard.style.borderLeftColor = '#10b981';
+  // If user drifted more than 60 meters away from route, trigger auto reroute!
+  if (minDistanceMeters > 60) {
+    handleOffRouteReroute(userLat, userLng);
   }
 }
 
 // Destination Reached Action
 function showDestinationReached() {
-  const instructEl = document.getElementById('navInstruction');
-  const distEl = document.getElementById('navNextTurnDist');
+  const distEl = document.getElementById('turnDistanceMeters');
+  const actionEl = document.getElementById('turnInstructionText');
   const distVal = document.getElementById('navRemainingDist');
   const timeVal = document.getElementById('navRemainingTime');
+  const iconWrap = document.getElementById('turnIconWrap');
+  const iconEl = document.getElementById('turnManeuverIcon');
 
-  if (instructEl) instructEl.innerText = '🎉 অভিনন্দন! আপনি গন্তব্যে পৌঁছে গেছেন।';
-  if (distEl) distEl.innerText = 'যাত্রা সফলভাবে সমাপ্ত হয়েছে';
-  if (distVal) distVal.innerText = '০ কিমি';
-  if (timeVal) timeVal.innerText = '০ মিনিট';
+  if (distEl) distEl.innerText = state.lang === 'bn' ? 'গন্তব্যে পৌঁছেছেন!' : 'Arrived!';
+  if (actionEl) actionEl.innerText = state.lang === 'bn' ? '🎉 যাত্রা সফলভাবে সম্পন্ন হয়েছে' : '🎉 Trip successfully completed';
+  if (distVal) distVal.innerText = state.lang === 'bn' ? '০ কিমি' : '0 km';
+  if (timeVal) timeVal.innerText = state.lang === 'bn' ? '০ মিনিট' : '0 min';
+  if (iconEl) iconEl.className = 'fa-solid fa-flag-checkered';
+  if (iconWrap) iconWrap.style.background = '#10b981';
 
-  showToast('🎉 অভিনন্দন! লাইভ নেভিগেশন সিমুলেশন গন্তব্যে সফলভাবে পৌঁছেছে।');
+  showToast(state.lang === 'bn' 
+    ? '🎉 অভিনন্দন! আপনি সফলভাবে গন্তব্যে পৌঁছেছেন।' 
+    : '🎉 Congratulations! You have successfully reached your destination.');
 }
 
-// Stop or Close Live Navigation
+// Stop or Exit Live Navigation
 function stopLiveNavigation(hideHud = true) {
+  state.navTracking.active = false;
+  state.navTracking.isMoving = false;
   state.navAnimation.active = false;
-  state.navAnimation.paused = false;
 
+  // Clear GPS watcher
+  if (state.navTracking.watchId !== null) {
+    if (navigator.geolocation) {
+      navigator.geolocation.clearWatch(state.navTracking.watchId);
+    }
+    state.navTracking.watchId = null;
+  }
+
+  // Clear simulation interval if any
   if (state.navAnimation.intervalId) {
     clearInterval(state.navAnimation.intervalId);
     state.navAnimation.intervalId = null;
   }
 
   if (hideHud) {
-    const hud = document.getElementById('liveNavHud');
-    if (hud) hud.style.display = 'none';
+    const topBanner = document.getElementById('turnGuidanceBanner');
+    if (topBanner) topBanner.style.display = 'none';
+    const bottomDock = document.getElementById('navBottomDock');
+    if (bottomDock) bottomDock.style.display = 'none';
 
     if (state.navAnimation.marker) {
       state.map.removeLayer(state.navAnimation.marker);
       state.navAnimation.marker = null;
     }
-    showToast('লাইভ নেভিগেশন সিমুলেশন বন্ধ করা হয়েছে।');
+    showToast(state.lang === 'bn' ? 'লাইভ নেভিগেশন বন্ধ করা হয়েছে।' : 'Live navigation closed.');
   }
-}
-
-// Toggle Pause / Resume
-function togglePauseLiveNavigation() {
-  if (!state.navAnimation.active) return;
-
-  state.navAnimation.paused = !state.navAnimation.paused;
-  const pauseBtn = document.getElementById('pauseNavBtn');
-
-  if (state.navAnimation.paused) {
-    if (pauseBtn) pauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-    showToast('নেভিগেশন সাময়িক বিরতি (Paused)');
-  } else {
-    if (pauseBtn) pauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-    showToast('নেভিগেশন পুনরায় চালু হয়েছে (Resumed)');
-  }
-}
-
-// Cycle Simulation Speed Multiplier (1x -> 2x -> 5x -> 10x -> 1x)
-function cycleNavSpeedMultiplier() {
-  const speeds = [1, 2, 5, 10];
-  const curr = state.navAnimation.speedMultiplier || 1;
-  const nextIdx = (speeds.indexOf(curr) + 1) % speeds.length;
-  const nextSpeed = speeds[nextIdx];
-
-  state.navAnimation.speedMultiplier = nextSpeed;
-  const speedBtn = document.getElementById('speedNavBtn');
-  if (speedBtn) speedBtn.innerText = `${nextSpeed}x`;
-
-  showToast(`সিমুলেশন স্পিড: ${nextSpeed}x`);
 }
 
 // Live Autocomplete Implementation for Route Waypoints
