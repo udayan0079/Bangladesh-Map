@@ -442,30 +442,24 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 #map {
   width: 100%;
   height: 100%;
-  background: #f1f5f9;
+  background: #f8fafc;
   z-index: 10;
 }
 
 /* Prevent Black/White box flicker and tear during zoom in/out */
 .leaflet-container {
-  background-color: #f1f5f9 !important;
+  background-color: #f8fafc !important;
   outline: 0;
 }
 
 .leaflet-tile {
-  transition: opacity 0.15s ease-out;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.leaflet-tile-container {
-  will-change: transform;
+  image-rendering: auto;
 }
 
 /* Bangladesh Mask Active Status Badge */

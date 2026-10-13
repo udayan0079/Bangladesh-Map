@@ -260,11 +260,14 @@ function initMap() {
     minZoom: 7,
     maxZoom: 20,
     maxBounds: BD_BOUNDS,
-    maxBoundsViscosity: 0.35, // Relaxed from 1.0 to eliminate border bounce & tile tearing
-    zoomControl: false
+    maxBoundsViscosity: 0.8,
+    zoomControl: false,
+    zoomAnimation: true,
+    fadeAnimation: true,
+    markerZoomAnimation: true
   });
 
-  // Dedicated Leaflet Pane for Outside Mask (Above tile layers at 200, below overlay routes at 400)
+  // Dedicated Leaflet Pane for Bangladesh Boundary Border (Above tile layers at 200, below overlay routes at 400)
   state.map.createPane('maskPane');
   state.map.getPane('maskPane').style.zIndex = 350;
   state.map.getPane('maskPane').style.pointerEvents = 'none';
@@ -272,32 +275,32 @@ function initMap() {
   // Custom Zoom Control at Bottom Right
   L.control.zoom({ position: 'bottomright' }).addTo(state.map);
 
-  // Setup Tile Layers with high resolution and smooth zoom caching (no 404s or white boxes)
+  // Setup Tile Layers with high resolution and continuous loading (no rate limits or white boxes)
   state.layers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 20,
     maxNativeZoom: 19,
-    keepBuffer: 8,
-    updateWhenZooming: false,
-    updateWhenIdle: true,
+    keepBuffer: 10,
+    updateWhenZooming: true,
+    updateWhenIdle: false,
     attribution: '&copy; OpenStreetMap contributors (Bangladesh)'
   });
 
   state.layers.hot = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
     maxZoom: 20,
     maxNativeZoom: 19,
-    keepBuffer: 8,
-    updateWhenZooming: false,
-    updateWhenIdle: true,
+    keepBuffer: 10,
+    updateWhenZooming: true,
+    updateWhenIdle: false,
     attribution: '&copy; OpenStreetMap contributors, Tiles style by Humanitarian OSM'
   });
 
   // Google Hybrid Satellite: Photorealistic aerial photography with zero 'no data available' errors & clear labels
   state.layers.satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
     maxZoom: 20,
-    maxNativeZoom: 19,
-    keepBuffer: 8,
-    updateWhenZooming: false,
-    updateWhenIdle: true,
+    maxNativeZoom: 20,
+    keepBuffer: 10,
+    updateWhenZooming: true,
+    updateWhenIdle: false,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '&copy; Google Satellite Imagery (High-Resolution)'
   });
@@ -305,10 +308,10 @@ function initMap() {
   // Google Clean Roads (Modern Clean Vector): Crisp authentic Google Maps roads, village pathways, highways & landmarks
   state.layers.carto = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
     maxZoom: 20,
-    maxNativeZoom: 19,
-    keepBuffer: 8,
-    updateWhenZooming: false,
-    updateWhenIdle: true,
+    maxNativeZoom: 20,
+    keepBuffer: 10,
+    updateWhenZooming: true,
+    updateWhenIdle: false,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '&copy; Google Maps (Clean Road Network)'
   });
@@ -318,18 +321,18 @@ function initMap() {
   state.layers.topo = L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     maxNativeZoom: 18,
-    keepBuffer: 8,
-    updateWhenZooming: false,
-    updateWhenIdle: true,
+    keepBuffer: 10,
+    updateWhenZooming: true,
+    updateWhenIdle: false,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '&copy; Google Terrain (Hillshading & Physical Geography)'
   });
 
-  // Add Default Layer
-  state.activeLayer = state.layers.osm;
+  // Add Default Layer: Google Clean Roads for instant zero-lag loading without white boxes
+  state.activeLayer = state.layers.carto;
   state.activeLayer.addTo(state.map);
 
-  // Apply Bangladesh-Only Inverse Mask using Canvas renderer (eliminates SVG coordinate glitch)
+  // Apply Bangladesh Boundary Border (Crisp emerald boundary outline, 0% opacity fill - ZERO black box glitches!)
   applyBangladeshMask();
 
   // Draw Major Rivers Layer (smooth curved waterways)
@@ -339,48 +342,35 @@ function initMap() {
   state.map.on('click', handleMapClick);
 }
 
-// Apply Inverse Mask (Hides Everything Outside Bangladesh Borders without SVG coordinate overflow)
+// Apply Bangladesh Boundary (Crisp Glowing Territorial Outline - Zero Canvas Inversion Glitches)
 function applyBangladeshMask() {
   if (typeof BD_BOUNDARY_GEOJSON === 'undefined' || !BD_BOUNDARY_GEOJSON.features) {
     console.warn('BD_BOUNDARY_GEOJSON not loaded.');
     return;
   }
 
-  // Regional Outer Ring covering South Asia / Bay of Bengal bounding region
-  // (Prevents SVG/Canvas integer overflow and black box glitch on deep zoom)
-  const regionalOuterRing = [
-    [15.0, 80.0],
-    [15.0, 98.0],
-    [30.0, 98.0],
-    [30.0, 80.0],
-    [15.0, 80.0]
-  ];
+  // Remove existing boundary layer if already added
+  if (state.maskPolygon) {
+    try {
+      state.map.removeLayer(state.maskPolygon);
+    } catch (e) {}
+    state.maskPolygon = null;
+  }
 
-  // Extract Holes: Bangladesh polygon boundaries converted to [lat, lng]
-  const holes = [];
-  BD_BOUNDARY_GEOJSON.features.forEach(feat => {
-    if (feat.geometry.type === 'Polygon') {
-      const ring = feat.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
-      holes.push(ring);
-    } else if (feat.geometry.type === 'MultiPolygon') {
-      feat.geometry.coordinates.forEach(poly => {
-        const ring = poly[0].map(coord => [coord[1], coord[0]]);
-        holes.push(ring);
-      });
-    }
-  });
-
-  // Dedicated Canvas Renderer for mask: eliminates SVG coordinate overflow bugs!
-  const maskRenderer = L.canvas({ pane: 'maskPane', padding: 0.5 });
-
-  state.maskPolygon = L.polygon([regionalOuterRing, ...holes], {
+  // Draw the official Bangladesh national border with vibrant emerald styling
+  // fillOpacity: 0 guarantees NO black boxes ever appear during zoom in or zoom out
+  state.maskPolygon = L.geoJSON(BD_BOUNDARY_GEOJSON, {
     pane: 'maskPane',
-    renderer: maskRenderer,
-    color: '#10b981',       // Vibrant emerald border along Bangladesh border
-    weight: 2.5,
-    fillColor: '#0b1329',   // Masks outside regions (India, Myanmar, etc.)
-    fillOpacity: 0.96,
-    interactive: false      // Allow click events to pass
+    style: {
+      color: '#059669',       // Vibrant emerald territorial border
+      weight: 3.5,            // Clean crisp boundary line
+      opacity: 0.95,
+      fillColor: 'transparent',
+      fillOpacity: 0,         // Completely transparent inside - prevents black box bug
+      lineJoin: 'round',
+      lineCap: 'round'
+    },
+    interactive: false        // Allow user clicks to pass through to roads and thanas
   }).addTo(state.map);
 }
 
