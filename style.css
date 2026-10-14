@@ -664,10 +664,12 @@ body {
 .districts-accordion {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
   padding-right: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .district-card {
@@ -675,65 +677,176 @@ body {
   border-radius: var(--border-radius-md);
   background: #ffffff;
   overflow: hidden;
-  transition: var(--transition-fast);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
+  min-height: min-content;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.district-card.open {
+  border-color: #a7f3d0;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.08);
 }
 
 .district-header {
-  padding: 10px 14px;
+  padding: 11px 13px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   cursor: pointer;
   background: #f8fafc;
+  min-height: 48px;
+  box-sizing: border-box;
+  transition: background 0.18s ease;
+  user-select: none;
 }
 
 .district-header:hover {
   background: #f1f5f9;
 }
 
-.dist-title {
+.district-card.open .district-header {
+  background: #f0fdf4;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dist-title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dist-title-group i {
+  color: #059669;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.dist-name {
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   color: #0f172a;
+  white-space: nowrap;
+}
+
+.dist-en {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dist-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .dist-count {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   background: #e2e8f0;
   color: #475569;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--border-radius-full);
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.district-card.open .dist-count {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.btn-isolate-district {
+  margin-left: 0;
+  padding: 4px 8px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: var(--border-radius-sm);
+  color: #047857;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.btn-isolate-district:hover {
+  background: #059669;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+.dist-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  transition: transform 0.25s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.district-card.open .dist-arrow {
+  transform: rotate(180deg);
+  color: #059669;
 }
 
 .thanas-grid {
-  padding: 10px;
-  display: flex;
+  padding: 12px;
+  display: none;
   flex-wrap: wrap;
   gap: 6px;
   background: #ffffff;
-  border-top: 1px solid #f1f5f9;
+}
+
+.district-card.open .thanas-grid {
+  display: flex;
+  animation: thanaFadeIn 0.2s ease-in-out;
+}
+
+@keyframes thanaFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .thana-chip {
-  padding: 4px 10px;
-  background: #f1f5f9;
+  padding: 5px 10px;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: var(--border-radius-full);
   font-size: 0.78rem;
+  font-weight: 500;
   color: #334155;
   cursor: pointer;
   transition: var(--transition-fast);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.thana-chip:hover {
+.thana-chip:hover, .thana-chip:active {
   background: var(--primary);
   color: #ffffff;
   border-color: var(--primary);
   transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.2);
 }
 
 /* Route & Distance Side Panel */
@@ -2305,6 +2418,22 @@ body {
     font-size: 16px !important;
   }
 
+  .thana-panel .panel-body,
+  .route-panel .panel-body {
+    padding: 12px 12px;
+    gap: 12px;
+  }
+
+  .districts-accordion {
+    gap: 8px;
+    padding-right: 2px;
+  }
+
+  .district-header {
+    padding: 10px 11px;
+    min-height: 46px;
+  }
+
   /* Clearances for overlays above bottom bar */
   .quick-places-dock {
     bottom: calc(64px + env(safe-area-inset-bottom, 0px));
@@ -2344,6 +2473,43 @@ body {
 
   .toast {
     bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Extra Small Phones (width <= 440px) */
+@media (max-width: 440px) {
+  .district-header {
+    padding: 9px 8px;
+    gap: 5px;
+  }
+
+  .dist-name {
+    font-size: 0.88rem;
+  }
+
+  .dist-en {
+    display: none; /* Hide secondary English name on very narrow screens so Bengali name has full space */
+  }
+
+  .dist-count {
+    font-size: 0.68rem;
+    padding: 2px 6px;
+  }
+
+  .btn-isolate-district {
+    font-size: 0.68rem;
+    padding: 3px 6px;
+    gap: 3px;
+  }
+
+  .btn-isolate-district i {
+    font-size: 0.68rem;
+  }
+
+  .dist-arrow {
+    width: 16px;
+    height: 16px;
+    font-size: 0.7rem;
   }
 }
 

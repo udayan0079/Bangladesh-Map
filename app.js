@@ -562,25 +562,34 @@ function setupThanaDirectory() {
       return;
     }
 
-    filtered.forEach(district => {
+    filtered.forEach((district, index) => {
       const card = document.createElement('div');
       card.className = 'district-card';
 
+      // Auto-open if search active, or first district in list for quick browsing
+      if (query || index === 0) {
+        card.classList.add('open');
+      }
+
       card.innerHTML = `
-        <div class="district-header">
-          <span class="dist-title">
+        <div class="district-header" title="${district.name} জেলার থানা তালিকা দেখুন">
+          <div class="dist-title-group">
             <i class="fa-solid fa-location-dot text-emerald"></i>
-            ${district.name} জেলা (${district.en})
-          </span>
-          <span class="dist-count">${toBanglaNum(district.thanas.length)} টি থানা</span>
-          <button class="btn-isolate-district" title="শুধুমাত্র এই জেলার ম্যাপ দেখুন">
-            <i class="fa-solid fa-map-location-dot"></i> একক ম্যাপ
-          </button>
+            <span class="dist-name">${district.name} জেলা</span>
+            <span class="dist-en">(${district.en})</span>
+          </div>
+          <div class="dist-header-actions">
+            <span class="dist-count">${toBanglaNum(district.thanas.length)} টি থানা</span>
+            <button class="btn-isolate-district" title="শুধুমাত্র এই জেলার ম্যাপ দেখুন">
+              <i class="fa-solid fa-map-location-dot"></i> একক ম্যাপ
+            </button>
+            <span class="dist-arrow"><i class="fa-solid fa-chevron-down"></i></span>
+          </div>
         </div>
         <div class="thanas-grid">
           ${district.thanas.map(thana => `
             <button class="thana-chip" data-district="${district.name}" data-thana="${thana}" data-lat="${district.lat}" data-lng="${district.lng}">
-              ${thana}
+              <i class="fa-solid fa-location-crosshairs text-emerald" style="font-size:0.68rem;"></i> ${thana}
             </button>
           `).join('')}
         </div>
@@ -593,10 +602,14 @@ function setupThanaDirectory() {
         activateSingleDistrictMode(district);
       });
 
-      // Click on District Header flies to District Center
+      // Click on District Header toggles accordion
       card.querySelector('.district-header').addEventListener('click', () => {
-        state.map.flyTo([district.lat, district.lng], 12, { duration: 1.5 });
-        showThanaMarker(district.lat, district.lng, `${district.name} জেলা সদর`, `${district.name} জেলার সকল থানা ও ইউনিয়ন`);
+        const isOpen = card.classList.contains('open');
+        card.classList.toggle('open');
+        if (!isOpen) {
+          state.map.flyTo([district.lat, district.lng], 11, { duration: 1.2 });
+          showThanaMarker(district.lat, district.lng, `${district.name} জেলা সদর`, `${district.name} জেলার মোট ${toBanglaNum(district.thanas.length)} টি থানা`);
+        }
       });
 
       // Click on Thana Chip
@@ -606,7 +619,12 @@ function setupThanaDirectory() {
           const thanaName = chip.getAttribute('data-thana');
           const distName = chip.getAttribute('data-district');
           
-          // Search specific thana coordinates via Nominatim
+          // Close panel on mobile screen so user sees the map
+          if (window.innerWidth <= 768) {
+            panel.classList.remove('active');
+          }
+          
+          // Search specific thana coordinates via authentic table or Nominatim
           searchAndFlyToThana(`${thanaName}, ${distName}, Bangladesh`, thanaName, distName);
         });
       });
@@ -630,6 +648,18 @@ function setupThanaDirectory() {
 // Fly to specific Thana and show deep zoom
 async function searchAndFlyToThana(fullQuery, thanaName, distName) {
   showToast(`${thanaName} থানায় যাওয়া হচ্ছে...`);
+
+  // 1. First check authentic BBS / UN OCHA Thana Coordinates
+  const coordKey = `${distName}:${thanaName}`;
+  const authenticCoord = (typeof BD_THANA_COORDS !== 'undefined' && (BD_THANA_COORDS[coordKey] || BD_THANA_COORDS[thanaName]));
+
+  if (authenticCoord && authenticCoord.lat && authenticCoord.lng) {
+    state.map.flyTo([authenticCoord.lat, authenticCoord.lng], 15, { duration: 1.4 });
+    showThanaMarker(authenticCoord.lat, authenticCoord.lng, `${thanaName} থানা/উপজেলা`, `${distName} জেলা, বাংলাদেশ`);
+    return;
+  }
+
+  // 2. Fallback to OpenStreetMap Nominatim
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&countrycodes=bd&format=json&limit=1`;
     const res = await fetch(url);
@@ -638,18 +668,23 @@ async function searchAndFlyToThana(fullQuery, thanaName, distName) {
     if (data && data.length > 0) {
       const lat = parseFloat(data[0].lat);
       const lng = parseFloat(data[0].lon);
-      state.map.flyTo([lat, lng], 15, { duration: 1.5 });
+      state.map.flyTo([lat, lng], 15, { duration: 1.4 });
       showThanaMarker(lat, lng, `${thanaName} থানা/উপজেলা`, `${distName} জেলা, বাংলাদেশ`);
     } else {
       // Fallback to district center
       const dist = BD_DISTRICTS.find(d => d.name === distName);
       if (dist) {
-        state.map.flyTo([dist.lat, dist.lng], 13, { duration: 1.5 });
+        state.map.flyTo([dist.lat, dist.lng], 13, { duration: 1.4 });
         showThanaMarker(dist.lat, dist.lng, `${thanaName} থানা`, `${distName} জেলা`);
       }
     }
   } catch (err) {
     console.error(err);
+    const dist = BD_DISTRICTS.find(d => d.name === distName);
+    if (dist) {
+      state.map.flyTo([dist.lat, dist.lng], 13, { duration: 1.4 });
+      showThanaMarker(dist.lat, dist.lng, `${thanaName} থানা`, `${distName} জেলা`);
+    }
   }
 }
 
